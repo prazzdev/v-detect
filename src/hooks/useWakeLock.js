@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 
-function useWakeLock() {
+export const useWakeLock = () => {
   const [wakeLock, setWakeLock] = useState(null);
 
   const requestWakeLock = useCallback(async () => {
@@ -31,6 +31,4 @@ function useWakeLock() {
   }, [requestWakeLock]);
 
   return !!wakeLock;
-}
-
-export default useWakeLock;
+};

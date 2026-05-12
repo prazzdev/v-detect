@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-function useOrientationLock() {
+export const useOrientationLock = () => {
   useEffect(() => {
     const lockOrientation = async () => {
       try {
@@ -22,6 +22,4 @@ function useOrientationLock() {
 
     // Tidak perlu unlock saat unmount agar tetap portrait selama sesi berkendara
   }, []);
-}
-
-export default useOrientationLock;
+};
