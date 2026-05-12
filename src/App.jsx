@@ -1,6 +1,6 @@
 // src/App.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Circle } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Circle, useMap } from "react-leaflet"; // Tambahkan useMap
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getDistance } from "geolib";
@@ -19,6 +19,17 @@ const createIcon = (type) =>
     iconAnchor: [15, 15],
   });
 
+// Komponen pembantu untuk memindahkan pusat peta secara otomatis
+function RecenterMap({ position, isFollowUser }) {
+  const map = useMap();
+  useEffect(() => {
+    if (position && isFollowUser) {
+      map.panTo([position.lat, position.lng], { animate: true });
+    }
+  }, [position, isFollowUser, map]);
+  return null;
+}
+
 function App() {
   const { position } = useGPS();
   const isWakeLockActive = useWakeLock();
@@ -26,7 +37,8 @@ function App() {
 
   const [userData, setUserData] = useState(null);
   const [otherUsers, setOtherUsers] = useState([]);
-  // State diperbarui untuk menyimpan timestamp agar bisa menghitung jeda waktu (heartbeat)
+  const [isFollowUser, setIsFollowUser] = useState(true); // State untuk kontrol kamera
+
   const [lastSentPos, setLastSentPos] = useState({
     lat: 0,
     lng: 0,
@@ -62,22 +74,18 @@ function App() {
     });
   }, []);
 
-  // 1. Sync Lokasi (Ditambahkan logika Heartbeat untuk mencegah Auto-Cleanup)
   useEffect(() => {
     const sync = async () => {
       if (!position || !userData) return;
 
       const now = new Date();
-      const timeDiff = (now.getTime() - lastSentPos.timestamp) / 1000; // Hitung selisih detik
+      const timeDiff = (now.getTime() - lastSentPos.timestamp) / 1000;
 
       const d = Math.sqrt(
         Math.pow(position.lat - lastSentPos.lat, 2) +
           Math.pow(position.lng - lastSentPos.lng, 2),
       );
 
-      // Kirim data jika:
-      // - Bergeser > 5 meter (0.00005)
-      // - ATAU sudah lewat 30 detik (Heartbeat agar data tidak dianggap 'mati' oleh database)
       if (d > 0.00005 || timeDiff > 30) {
         await supabase.from("active_users").upsert({
           user_id: userData.plateNumber.toUpperCase(),
@@ -96,7 +104,6 @@ function App() {
     sync();
   }, [position, userData, lastSentPos]);
 
-  // 2. Realtime Subscription
   useEffect(() => {
     if (!userData) return;
 
@@ -133,7 +140,6 @@ function App() {
     };
   }, [userData, updateUsersList]);
 
-  // 3. Warning Logic
   useEffect(() => {
     if (!position || otherUsers.length === 0) {
       setIsWarningActive(false);
@@ -158,13 +164,10 @@ function App() {
     }
   }, [position, otherUsers, RADIUS_WARNING, playWarningEffects]);
 
-  // 4. Tab Close Cleanup
   useEffect(() => {
     const handleTabClose = () => {
       if (userData) {
-        // Logika cleanup manual (opsional jika cron sudah jalan)
         const { plateNumber } = userData;
-        // Gunakan navigator.sendBeacon jika ingin benar-benar memastikan data terhapus saat tab tutup
       }
     };
 
@@ -179,7 +182,6 @@ function App() {
       className={`min-h-screen transition-colors duration-500 ${isWarningActive ? "bg-red-50" : "bg-slate-50"} p-4 font-sans text-slate-900`}
     >
       <div className="max-w-lg mx-auto space-y-4">
-        {/* Status Bar Indikator Wake Lock */}
         <div className="flex justify-end px-2">
           <div
             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black tracking-tighter ${isWakeLockActive ? "bg-green-100 text-green-600" : "bg-slate-200 text-slate-500"}`}
@@ -191,7 +193,6 @@ function App() {
           </div>
         </div>
 
-        {/* Warning Banner */}
         <div
           className={`overflow-hidden transition-all duration-500 ${isWarningActive ? "max-h-20 opacity-100" : "max-h-0 opacity-0"}`}
         >
@@ -200,7 +201,6 @@ function App() {
           </div>
         </div>
 
-        {/* Identity Card */}
         <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-xl">
@@ -223,39 +223,57 @@ function App() {
           </button>
         </div>
 
-        {/* MAP RADAR */}
+        {/* MAP RADAR DENGAN KONTROL KAMERA */}
         <div className="bg-white rounded-[2.5rem] p-2 shadow-xl border border-white h-[380px] relative overflow-hidden">
           {position ? (
-            <MapContainer
-              center={[position.lat, position.lng]}
-              zoom={18}
-              className="h-full w-full rounded-[2rem]"
-              zoomControl={false}
-            >
-              <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-              <Marker
-                position={[position.lat, position.lng]}
-                icon={createIcon(userData.vehicleType)}
-              />
-              <Circle
+            <>
+              <MapContainer
                 center={[position.lat, position.lng]}
-                radius={RADIUS_WARNING}
-                pathOptions={{
-                  fillColor: "red",
-                  color: "red",
-                  weight: 1,
-                  opacity: 0.2,
-                  fillOpacity: 0.05,
-                }}
-              />
-              {otherUsers.map((user) => (
+                zoom={18}
+                className="h-full w-full rounded-[2rem]"
+                zoomControl={false}
+              >
+                <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+
+                {/* Komponen Sinkronisasi Kamera */}
+                <RecenterMap position={position} isFollowUser={isFollowUser} />
+
                 <Marker
-                  key={user.user_id}
-                  position={[user.lat, user.lng]}
-                  icon={createIcon(user.vehicle_type)}
+                  position={[position.lat, position.lng]}
+                  icon={createIcon(userData.vehicleType)}
                 />
-              ))}
-            </MapContainer>
+                <Circle
+                  center={[position.lat, position.lng]}
+                  radius={RADIUS_WARNING}
+                  pathOptions={{
+                    fillColor: "red",
+                    color: "red",
+                    weight: 1,
+                    opacity: 0.2,
+                    fillOpacity: 0.05,
+                  }}
+                />
+                {otherUsers.map((user) => (
+                  <Marker
+                    key={user.user_id}
+                    position={[user.lat, user.lng]}
+                    icon={createIcon(user.vehicle_type)}
+                  />
+                ))}
+              </MapContainer>
+
+              {/* Tombol Toggle Lock Kamera */}
+              <button
+                onClick={() => setIsFollowUser(!isFollowUser)}
+                className={`absolute bottom-6 right-6 z-[1000] px-4 py-2 rounded-full shadow-lg font-black text-[10px] tracking-widest border transition-all duration-300 ${
+                  isFollowUser
+                    ? "bg-blue-600 text-white border-blue-400"
+                    : "bg-white text-slate-400 border-slate-200"
+                }`}
+              >
+                {isFollowUser ? "🔒 LOCKED" : "🔓 FREE"}
+              </button>
+            </>
           ) : (
             <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 gap-3">
               <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -266,7 +284,6 @@ function App() {
           )}
         </div>
 
-        {/* List Vehicles Section */}
         <div className="space-y-2">
           <h3 className="text-[10px] font-black text-slate-400 px-2 tracking-[0.2em]">
             KENDARAAN TERDEKAT
