@@ -13,3 +13,7 @@
     height: 100%;
     z-index: 1;
 }
+
+.leaflet-marker-icon {
+    transition: all 0.8s linear;
+}
