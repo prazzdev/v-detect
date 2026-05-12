@@ -26,7 +26,12 @@ function App() {
 
   const [userData, setUserData] = useState(null);
   const [otherUsers, setOtherUsers] = useState([]);
-  const [lastSentPos, setLastSentPos] = useState({ lat: 0, lng: 0 });
+  // State diperbarui untuk menyimpan timestamp agar bisa menghitung jeda waktu (heartbeat)
+  const [lastSentPos, setLastSentPos] = useState({
+    lat: 0,
+    lng: 0,
+    timestamp: 0,
+  });
   const [isWarningActive, setIsWarningActive] = useState(false);
 
   const audioRef = useRef(
@@ -34,15 +39,11 @@ function App() {
   );
   const RADIUS_WARNING = APP_SETTINGS?.RADIUS_WARNING || 30;
 
-  // Fungsi Peringatan (Suara + Getar)
   const playWarningEffects = useCallback(() => {
-    // 1. Putar Suara
     audioRef.current.currentTime = 0;
     audioRef.current.play().catch(() => {});
-
-    // 2. Trigger Getar (Hanya jika didukung perangkat)
     if ("vibrate" in navigator) {
-      navigator.vibrate(200); // Bergetar selama 200ms
+      navigator.vibrate(200);
     }
   }, []);
 
@@ -53,7 +54,6 @@ function App() {
         const oldUser = prev[index];
         if (oldUser.lat === newUser.lat && oldUser.lng === newUser.lng)
           return prev;
-
         const newList = [...prev];
         newList[index] = newUser;
         return newList;
@@ -62,26 +62,35 @@ function App() {
     });
   }, []);
 
-  // 1. Sync Lokasi (Disesuaikan agar tidak terlalu sensitif terhadap noise)
+  // 1. Sync Lokasi (Ditambahkan logika Heartbeat untuk mencegah Auto-Cleanup)
   useEffect(() => {
     const sync = async () => {
       if (!position || !userData) return;
+
+      const now = new Date();
+      const timeDiff = (now.getTime() - lastSentPos.timestamp) / 1000; // Hitung selisih detik
+
       const d = Math.sqrt(
         Math.pow(position.lat - lastSentPos.lat, 2) +
           Math.pow(position.lng - lastSentPos.lng, 2),
       );
 
-      // Ambang batas ditingkatkan menjadi 0.00005 (~5-6 meter)
-      // untuk mencegah pemborosan database akibat noise sensor.
-      if (d > 0.00005) {
+      // Kirim data jika:
+      // - Bergeser > 5 meter (0.00005)
+      // - ATAU sudah lewat 30 detik (Heartbeat agar data tidak dianggap 'mati' oleh database)
+      if (d > 0.00005 || timeDiff > 30) {
         await supabase.from("active_users").upsert({
           user_id: userData.plateNumber.toUpperCase(),
           lat: position.lat,
           lng: position.lng,
           vehicle_type: userData.vehicleType,
-          last_update: new Date().toISOString(),
+          last_update: now.toISOString(),
         });
-        setLastSentPos({ lat: position.lat, lng: position.lng });
+        setLastSentPos({
+          lat: position.lat,
+          lng: position.lng,
+          timestamp: now.getTime(),
+        });
       }
     };
     sync();
@@ -109,7 +118,7 @@ function App() {
         (p) => {
           if (p.eventType === "DELETE") {
             setOtherUsers((prev) =>
-              prev.filter((u) => u.user_id !== p.old.user_id),
+              prev.filter((u) => u.user_id !== (p.old.user_id || p.old.id)),
             );
           } else {
             if (p.new.user_id !== userData.plateNumber.toUpperCase())
@@ -153,11 +162,9 @@ function App() {
   useEffect(() => {
     const handleTabClose = () => {
       if (userData) {
+        // Logika cleanup manual (opsional jika cron sudah jalan)
         const { plateNumber } = userData;
-        const blob = new Blob(
-          [JSON.stringify({ user_id: plateNumber.toUpperCase() })],
-          { type: "application/json" },
-        );
+        // Gunakan navigator.sendBeacon jika ingin benar-benar memastikan data terhapus saat tab tutup
       }
     };
 
