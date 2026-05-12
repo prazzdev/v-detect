@@ -15,7 +15,8 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Power, Lock, Unlock } from "lucide-react";
+import { Power, Lock, Unlock, HelpCircle, LogOut } from "lucide-react";
+import Swal from "sweetalert2";
 import { getDistance, getRhumbLineBearing } from "geolib";
 import { useGPS } from "./hooks/useGPS";
 import { Auth } from "./components/Auth";
@@ -24,6 +25,7 @@ import { APP_SETTINGS } from "./config/appConfig";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useOrientationLock } from "./hooks/useOrientationLock";
 
+// Custom Icon Generator
 const createIcon = (type, rotation = 0, label = "", isSelf = false) =>
   L.divIcon({
     className: "custom-icon",
@@ -49,7 +51,8 @@ const createIcon = (type, rotation = 0, label = "", isSelf = false) =>
     iconAnchor: [0, 0],
   });
 
-function RecenterMap({ position, isFollowUser, isDrivingMode, heading }) {
+// Map Recenter Component
+function RecenterMap({ position, isFollowUser, isDrivingMode }) {
   const map = useMap();
   useEffect(() => {
     if (position && isFollowUser) {
@@ -82,9 +85,9 @@ function App() {
     lat: 0,
     lng: 0,
     timestamp: 0,
-    heading: 0,
   });
 
+  // Auth & Profile Lifecycle
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -103,7 +106,7 @@ function App() {
   }, []);
 
   const fetchProfile = async (userId) => {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("profiles")
       .select("full_name, plate_number, vehicle_type")
       .eq("id", userId)
@@ -135,6 +138,7 @@ function App() {
     }
   };
 
+  // Inactivity Logic
   useEffect(() => {
     if (isActive && position) {
       clearTimeout(inactivityTimer.current);
@@ -147,6 +151,7 @@ function App() {
     return () => clearTimeout(inactivityTimer.current);
   }, [position, isActive, removeMeFromRadar]);
 
+  // Heading Calculation
   const userHeading = useMemo(() => {
     if (position?.heading !== null && position?.heading !== undefined)
       return position.heading;
@@ -161,12 +166,20 @@ function App() {
     return 0;
   }, [position, lastSentPos]);
 
+  // Alert & Warning Logic
   const [isWarningActive, setIsWarningActive] = useState(false);
   const audioRef = useRef(
     new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg"),
   );
   const RADIUS_WARNING = APP_SETTINGS?.RADIUS_WARNING || 30;
 
+  const playWarningEffects = useCallback(() => {
+    audioRef.current.currentTime = 0;
+    audioRef.current.play().catch(() => {});
+    if ("vibrate" in navigator) navigator.vibrate(200);
+  }, []);
+
+  // Fullscreen Logic
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
       appRef.current.requestFullscreen().catch((err) => alert(err.message));
@@ -184,12 +197,7 @@ function App() {
       document.removeEventListener("fullscreenchange", handleFsChange);
   }, []);
 
-  const playWarningEffects = useCallback(() => {
-    audioRef.current.currentTime = 0;
-    audioRef.current.play().catch(() => {});
-    if ("vibrate" in navigator) navigator.vibrate(200);
-  }, []);
-
+  // Online Status Logic
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -201,25 +209,13 @@ function App() {
     };
   }, []);
 
-  const updateUsersList = useCallback((newUser) => {
-    setOtherUsers((prev) => {
-      const index = prev.findIndex((u) => u.user_id === newUser.user_id);
-      if (index !== -1) {
-        if (prev[index].lat === newUser.lat && prev[index].lng === newUser.lng)
-          return prev;
-        const newList = [...prev];
-        newList[index] = newUser;
-        return newList;
-      }
-      return [...prev, newUser];
-    });
-  }, []);
-
+  // Realtime Database Sync (Self)
   useEffect(() => {
     const sync = async () => {
       if (!position || !userData || !isOnline || !isActive) return;
       const now = new Date();
       const timeDiff = (now.getTime() - lastSentPos.timestamp) / 1000;
+
       const minTime = isPowerSaving ? 60 : 30;
       const minDistance = isPowerSaving ? 0.0001 : 0.00005;
 
@@ -246,6 +242,21 @@ function App() {
     sync();
   }, [position, userData, lastSentPos, isOnline, isPowerSaving, isActive]);
 
+  // Realtime Database Sync (Others)
+  const updateUsersList = useCallback((newUser) => {
+    setOtherUsers((prev) => {
+      const index = prev.findIndex((u) => u.user_id === newUser.user_id);
+      if (index !== -1) {
+        if (prev[index].lat === newUser.lat && prev[index].lng === newUser.lng)
+          return prev;
+        const newList = [...prev];
+        newList[index] = newUser;
+        return newList;
+      }
+      return [...prev, newUser];
+    });
+  }, []);
+
   useEffect(() => {
     if (!userData) return;
     const loadData = async () => {
@@ -256,6 +267,7 @@ function App() {
       if (data) setOtherUsers(data);
     };
     loadData();
+
     const channel = supabase
       .channel("live-traffic")
       .on(
@@ -275,6 +287,7 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [userData, updateUsersList]);
 
+  // Proximity Warning System
   useEffect(() => {
     if (!position || otherUsers.length === 0 || !isActive) {
       setIsWarningActive(false);
@@ -298,6 +311,48 @@ function App() {
     }
   }, [position, otherUsers, RADIUS_WARNING, playWarningEffects, isActive]);
 
+  const handleLogout = async () => {
+    const result = await Swal.fire({
+      title: "Keluar Aplikasi?",
+      text: "Data lokasi radar Anda akan dihapus dari sistem.",
+      icon: "warning",
+      showCancelButton: true,
+      confirmButtonColor: "#ef4444", // Warna merah biar tegas
+      cancelButtonColor: "#64748b",
+      confirmButtonText: "Ya, Keluar",
+      cancelButtonText: "Batal",
+      reverseButtons: true,
+      background: "#ffffff",
+      color: "#0f172a",
+      borderRadius: "1.5rem",
+    });
+
+    if (result.isConfirmed) {
+      await removeMeFromRadar();
+      await supabase.auth.signOut();
+    }
+  };
+
+  const showHelp = () => {
+    Swal.fire({
+      title: "<strong>Panduan Radar</strong>",
+      icon: "info",
+      html: `
+          <div style="text-align: left; font-size: 0.9rem; line-height: 1.6; color: #475569;">
+            <ul style="list-style-type: none; padding-left: 0;">
+              <li style="margin-bottom: 8px;">🚀 <b>Aktifkan Radar:</b> Tekan tombol power di tengah bawah.</li>
+              <li style="margin-bottom: 8px;">🛰️ <b>Berbagi Lokasi:</b> Data Anda akan terhapus otomatis jika tidak bergerak dalam 1 menit.</li>
+              <li style="margin-bottom: 8px;">🧭 <b>Mode Drive:</b> Tekan ikon kompas untuk memutar peta sesuai arah hadap Anda.</li>
+              <li style="margin-bottom: 8px;">⚠️ <b>Peringatan:</b> Radar akan berbunyi dan bergetar jika jarak kendaraan lain di bawah 30 meter.</li>
+            </ul>
+          </div>
+        `,
+      confirmButtonText: "Mengerti",
+      confirmButtonColor: "#2563eb",
+      borderRadius: "1.5rem",
+    });
+  };
+
   return (
     <div
       ref={appRef}
@@ -307,6 +362,7 @@ function App() {
         <Auth onAuthSuccess={() => {}} />
       ) : (
         <div className="max-w-lg mx-auto space-y-4 pb-24">
+          {/* Header Controls */}
           <div className="flex justify-between items-center px-2">
             <div
               className={`px-3 py-1 rounded-full text-[9px] font-black tracking-tighter transition-colors duration-300 ${
@@ -339,6 +395,7 @@ function App() {
             </div>
           </div>
 
+          {/* Danger Warning Alert */}
           <div
             className={`overflow-hidden transition-all duration-500 ${isWarningActive ? "max-h-20 opacity-100" : "max-h-0 opacity-0"}`}
           >
@@ -347,6 +404,7 @@ function App() {
             </div>
           </div>
 
+          {/* User Profile Card */}
           <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-xl">
@@ -375,6 +433,7 @@ function App() {
             </button>
           </div>
 
+          {/* Map Container */}
           <div
             className={`bg-white rounded-[2.5rem] p-2 shadow-xl border border-white relative overflow-hidden ${isFullscreen ? "h-[70vh]" : "h-[380px]"}`}
           >
@@ -405,8 +464,9 @@ function App() {
                     position={position}
                     isFollowUser={isFollowUser}
                     isDrivingMode={isDrivingMode}
-                    heading={userHeading}
                   />
+
+                  {/* My Marker */}
                   {userData && (
                     <Marker
                       position={[position.lat, position.lng]}
@@ -418,6 +478,8 @@ function App() {
                       )}
                     />
                   )}
+
+                  {/* Warning Radius */}
                   {isActive && (
                     <Circle
                       center={[position.lat, position.lng]}
@@ -431,6 +493,8 @@ function App() {
                       }}
                     />
                   )}
+
+                  {/* Other Users Markers */}
                   {isActive &&
                     otherUsers.map((user) => (
                       <Marker
@@ -438,8 +502,8 @@ function App() {
                         position={[user.lat, user.lng]}
                         icon={createIcon(
                           user.vehicle_type,
-                          isDrivingMode ? 0 : 0, // Icon orang lain biasanya statis/menghadap utara jika data rotasi tidak ada
-                          user.user_id.toUpperCase(), // MENGEMBALIKAN LABEL DISINI
+                          0,
+                          user.user_id.toUpperCase(),
                           false,
                         )}
                       />
@@ -473,6 +537,7 @@ function App() {
             </button>
           </div>
 
+          {/* Nearby List */}
           <div className="space-y-2">
             <h3 className="text-[10px] font-black text-slate-400 px-2 tracking-[0.2em]">
               KENDARAAN TERDEKAT
@@ -530,21 +595,17 @@ function App() {
             )}
           </div>
 
+          {/* Navigation Bar */}
           <div className="fixed bottom-0 left-0 right-0 z-[2000]">
             <div className="relative h-20 bg-white border-t border-slate-200 shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)] flex justify-center items-center">
               <div className="absolute -top-10 flex flex-col items-center">
                 <button
                   onClick={toggleTracking}
-                  className={`
-                              relative w-20 h-20 rounded-full flex items-center justify-center
-                              transition-all duration-300 active:scale-95
-                              border-[6px] border-slate-50
-                              ${
-                                isActive
-                                  ? "bg-emerald-500 shadow-[0_8px_25px_rgba(16,185,129,0.4)]"
-                                  : "bg-white shadow-[0_8px_25px_rgba(0,0,0,0.1)]"
-                              }
-                            `}
+                  className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300 active:scale-95 border-[6px] border-slate-50 ${
+                    isActive
+                      ? "bg-emerald-500 shadow-[0_8px_25px_rgba(16,185,129,0.4)]"
+                      : "bg-white shadow-[0_8px_25px_rgba(0,0,0,0.1)]"
+                  }`}
                 >
                   <Power
                     size={32}
@@ -561,13 +622,28 @@ function App() {
                   </span>
                 </div>
               </div>
-              <div className="w-full flex justify-between px-10">
-                <div className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">
-                  System v1.0
-                </div>
-                <div className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">
-                  {userData?.plateNumber.toUpperCase()}
-                </div>
+              <div className="w-full flex justify-between px-8 items-center">
+                {/* Tombol Bantuan dengan SweetAlert2 */}
+                <button
+                  onClick={showHelp}
+                  className="p-2 rounded-xl text-slate-400 hover:bg-slate-50 hover:text-blue-600 transition-all flex flex-col items-center gap-1"
+                >
+                  <HelpCircle size={20} strokeWidth={2.5} />
+                  <span className="text-[7px] font-black tracking-tighter">
+                    BANTUAN
+                  </span>
+                </button>
+
+                {/* Tombol Keluar dengan SweetAlert2 */}
+                <button
+                  onClick={handleLogout}
+                  className="p-2 rounded-xl text-slate-400 hover:bg-red-50 hover:text-red-500 transition-all flex flex-col items-center gap-1"
+                >
+                  <LogOut size={20} strokeWidth={2.5} />
+                  <span className="text-[7px] font-black tracking-tighter">
+                    KELUAR
+                  </span>
+                </button>
               </div>
             </div>
           </div>
