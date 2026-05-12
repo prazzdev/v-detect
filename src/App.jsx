@@ -15,7 +15,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Power } from "lucide-react";
+import { Power, Crosshair, Lock, Unlock } from "lucide-react";
 import { getDistance, getRhumbLineBearing } from "geolib";
 import { useGPS } from "./hooks/useGPS";
 import RegistrationForm from "./components/RegistrationForm";
@@ -61,7 +61,7 @@ function App() {
   useOrientationLock();
 
   const [userData, setUserData] = useState(null);
-  const [isActive, setIsActive] = useState(false); // State baru untuk tombol On/Off
+  const [isActive, setIsActive] = useState(false);
   const [otherUsers, setOtherUsers] = useState([]);
   const [isFollowUser, setIsFollowUser] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -79,7 +79,6 @@ function App() {
     heading: 0,
   });
 
-  // Fungsi untuk menghapus data dari Supabase (Cleanup)
   const removeMeFromRadar = useCallback(async () => {
     if (!userData) return;
     await supabase
@@ -88,7 +87,6 @@ function App() {
       .eq("user_id", userData.plateNumber.toUpperCase());
   }, [userData]);
 
-  // Handle Toggle Button Manual
   const toggleTracking = async () => {
     const newState = !isActive;
     setIsActive(newState);
@@ -98,7 +96,6 @@ function App() {
     }
   };
 
-  // Logic Safety Timeout (60 detik tidak bergerak = Off)
   useEffect(() => {
     if (isActive && position) {
       clearTimeout(inactivityTimer.current);
@@ -106,7 +103,7 @@ function App() {
         setIsActive(false);
         removeMeFromRadar();
         alert("Radar dinonaktifkan otomatis karena tidak ada pergerakan.");
-      }, 60000); // 60 detik
+      }, 60000);
     }
     return () => clearTimeout(inactivityTimer.current);
   }, [position, isActive, removeMeFromRadar]);
@@ -179,7 +176,6 @@ function App() {
     });
   }, []);
 
-  // Sync Data ke Supabase (Hanya jika isActive)
   useEffect(() => {
     const sync = async () => {
       if (!position || !userData || !isOnline || !isActive) return;
@@ -272,9 +268,6 @@ function App() {
         <RegistrationForm onRegister={setUserData} />
       ) : (
         <div className="max-w-lg mx-auto space-y-4 pb-24">
-          {" "}
-          {/* Tambah padding bottom agar tombol tidak menutupi list */}
-          {/* Status Bar */}
           <div className="flex justify-between items-center px-2">
             <div
               className={`px-3 py-1 rounded-full text-[9px] font-black tracking-tighter ${isOnline ? "bg-blue-100 text-blue-600" : "bg-orange-100 text-orange-600 animate-pulse"}`}
@@ -296,7 +289,7 @@ function App() {
               </button>
             </div>
           </div>
-          {/* Warning Banner */}
+
           <div
             className={`overflow-hidden transition-all duration-500 ${isWarningActive ? "max-h-20 opacity-100" : "max-h-0 opacity-0"}`}
           >
@@ -304,7 +297,7 @@ function App() {
               ⚠️ JARAK BERBAHAYA!
             </div>
           </div>
-          {/* Profil Kendaraan */}
+
           <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-xl">
@@ -332,7 +325,7 @@ function App() {
               </span>
             </button>
           </div>
-          {/* Map Container */}
+
           <div
             className={`bg-white rounded-[2.5rem] p-2 shadow-xl border border-white relative overflow-hidden ${isFullscreen ? "h-[70vh]" : "h-[380px]"}`}
           >
@@ -358,6 +351,7 @@ function App() {
                         : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     }
                   />
+                  <ZoomControl position="bottomleft" />
                   <RecenterMap
                     position={position}
                     isFollowUser={isFollowUser}
@@ -400,6 +394,18 @@ function App() {
                       />
                     ))}
                 </MapContainer>
+
+                {/* Lock/Follow Map Button */}
+                <button
+                  onClick={() => setIsFollowUser(!isFollowUser)}
+                  className={`absolute bottom-4 right-4 z-[1000] p-3 rounded-2xl shadow-lg border transition-all ${
+                    isFollowUser
+                      ? "bg-blue-600 border-blue-400 text-white"
+                      : "bg-white border-slate-200 text-slate-400"
+                  }`}
+                >
+                  {isFollowUser ? <Lock size={20} /> : <Unlock size={20} />}
+                </button>
               </div>
             ) : (
               <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 gap-3">
@@ -416,7 +422,7 @@ function App() {
               {isSatellite ? "🗺️ ROAD" : "🛰️ SATELLITE"}
             </button>
           </div>
-          {/* List Kendaraan */}
+
           <div className="space-y-2">
             <h3 className="text-[10px] font-black text-slate-400 px-2 tracking-[0.2em]">
               KENDARAAN TERDEKAT
@@ -473,11 +479,9 @@ function App() {
               </div>
             )}
           </div>
-          {/* Tombol Besar On/Off (Floating Bottom) */}
+
           <div className="fixed bottom-0 left-0 right-0 z-[2000]">
-            {/* Bar Background */}
             <div className="relative h-20 bg-white border-t border-slate-200 shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)] flex justify-center items-center">
-              {/* Container Tombol yang Menonjol Keluar */}
               <div className="absolute -top-10 flex flex-col items-center">
                 <button
                   onClick={toggleTracking}
@@ -497,12 +501,8 @@ function App() {
                     strokeWidth={2.5}
                     className={`transition-colors duration-300 ${isActive ? "text-white" : "text-slate-300"}`}
                   />
-
-                  {/* Kilatan Cahaya halus di bagian atas tombol */}
                   <div className="absolute top-2 w-10 h-5 bg-white/20 rounded-full blur-[2px]"></div>
                 </button>
-
-                {/* Label Status di bawah tombol */}
                 <div className="mt-2">
                   <span
                     className={`text-[10px] font-black tracking-[0.15em] uppercase px-3 py-0.5 rounded-full bg-white/80 backdrop-blur-sm shadow-sm border ${isActive ? "text-emerald-600 border-emerald-100" : "text-slate-400 border-slate-100"}`}
@@ -511,8 +511,6 @@ function App() {
                   </span>
                 </div>
               </div>
-
-              {/* Area kosong di kiri & kanan tombol bisa dipakai untuk info tambahan jika perlu */}
               <div className="w-full flex justify-between px-10">
                 <div className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">
                   System v1.0
