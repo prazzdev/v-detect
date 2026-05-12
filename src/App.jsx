@@ -15,10 +15,10 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { Power, Crosshair, Lock, Unlock } from "lucide-react";
+import { Power, Lock, Unlock } from "lucide-react";
 import { getDistance, getRhumbLineBearing } from "geolib";
 import { useGPS } from "./hooks/useGPS";
-import RegistrationForm from "./components/RegistrationForm";
+import Auth from "./components/Auth"; // Komponen Auth Baru
 import { supabase } from "./lib/supabaseClient";
 import { APP_SETTINGS } from "./config/appConfig";
 import { useWakeLock } from "./hooks/useWakeLock";
@@ -60,6 +60,7 @@ function App() {
   const isWakeLockActive = useWakeLock();
   useOrientationLock();
 
+  const [session, setSession] = useState(null);
   const [userData, setUserData] = useState(null);
   const [isActive, setIsActive] = useState(false);
   const [otherUsers, setOtherUsers] = useState([]);
@@ -78,6 +79,40 @@ function App() {
     timestamp: 0,
     heading: 0,
   });
+
+  // Cek Sesi Login & Ambil Profil Kendaraan
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setSession(session);
+      if (session) fetchProfile(session.user.id);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+      if (session) fetchProfile(session.user.id);
+      else setUserData(null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchProfile = async (userId) => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("full_name, plate_number, vehicle_type")
+      .eq("id", userId)
+      .single();
+
+    if (data) {
+      setUserData({
+        fullName: data.full_name,
+        plateNumber: data.plate_number,
+        vehicleType: data.vehicle_type,
+      });
+    }
+  };
 
   const removeMeFromRadar = useCallback(async () => {
     if (!userData) return;
@@ -264,15 +299,25 @@ function App() {
       ref={appRef}
       className={`min-h-screen transition-colors duration-500 ${isWarningActive ? "bg-red-50" : "bg-slate-50"} p-4 font-sans text-slate-900 overflow-y-auto`}
     >
-      {!userData ? (
-        <RegistrationForm onRegister={setUserData} />
+      {!session ? (
+        <Auth onAuthSuccess={() => {}} />
       ) : (
         <div className="max-w-lg mx-auto space-y-4 pb-24">
           <div className="flex justify-between items-center px-2">
             <div
-              className={`px-3 py-1 rounded-full text-[9px] font-black tracking-tighter ${isOnline ? "bg-blue-100 text-blue-600" : "bg-orange-100 text-orange-600 animate-pulse"}`}
+              className={`px-3 py-1 rounded-full text-[9px] font-black tracking-tighter transition-colors duration-300 ${
+                isActive
+                  ? isOnline
+                    ? "bg-emerald-100 text-emerald-600"
+                    : "bg-orange-100 text-orange-600 animate-pulse"
+                  : "bg-slate-200 text-slate-400"
+              }`}
             >
-              {isOnline ? "● ONLINE" : "○ OFFLINE"}
+              {isActive
+                ? isOnline
+                  ? "● ONLINE"
+                  : "○ CONNECTION LOST"
+                : "○ STANDBY"}
             </div>
             <div className="flex gap-2">
               <button
@@ -301,14 +346,14 @@ function App() {
           <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-xl">
-                {userData.vehicleType === "mobil" ? "🚗" : "🏍️"}
+                {userData?.vehicleType === "mobil" ? "🚗" : "🏍️"}
               </div>
               <div>
                 <p className="text-[10px] font-bold text-blue-600 uppercase leading-none mb-1">
-                  {userData.vehicleType}
+                  {userData?.vehicleType || "loading..."}
                 </p>
                 <p className="font-black font-mono text-slate-700 text-lg">
-                  {userData.plateNumber.toUpperCase()}
+                  {userData?.plateNumber.toUpperCase() || "..."}
                 </p>
               </div>
             </div>
@@ -358,15 +403,17 @@ function App() {
                     isDrivingMode={isDrivingMode}
                     heading={userHeading}
                   />
-                  <Marker
-                    position={[position.lat, position.lng]}
-                    icon={createIcon(
-                      userData.vehicleType,
-                      isDrivingMode ? userHeading : 0,
-                      userData.plateNumber.toUpperCase(),
-                      true,
-                    )}
-                  />
+                  {userData && (
+                    <Marker
+                      position={[position.lat, position.lng]}
+                      icon={createIcon(
+                        userData.vehicleType,
+                        isDrivingMode ? userHeading : 0,
+                        userData.plateNumber.toUpperCase(),
+                        true,
+                      )}
+                    />
+                  )}
                   {isActive && (
                     <Circle
                       center={[position.lat, position.lng]}
@@ -395,7 +442,6 @@ function App() {
                     ))}
                 </MapContainer>
 
-                {/* Lock/Follow Map Button */}
                 <button
                   onClick={() => setIsFollowUser(!isFollowUser)}
                   className={`absolute bottom-4 right-4 z-[1000] p-3 rounded-2xl shadow-lg border transition-all ${
