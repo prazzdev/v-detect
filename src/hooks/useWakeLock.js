@@ -32,3 +32,5 @@ export const useWakeLock = () => {
 
   return !!wakeLock;
 };
+
+export default useWakeLock;

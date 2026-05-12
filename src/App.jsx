@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Circle, useMap } from "react-leaflet"; // Tambahkan useMap
 import L from "leaflet";
@@ -8,8 +7,8 @@ import { useGPS } from "./hooks/useGPS";
 import RegistrationForm from "./components/RegistrationForm";
 import { supabase } from "./lib/supabaseClient";
 import { APP_SETTINGS } from "./config/appConfig";
-import useWakeLock from "./hooks/useWakeLock";
-import useOrientationLock from "./hooks/useOrientationLock";
+import { useWakeLock } from "./hooks/useWakeLock";
+import { useOrientationLock } from "./hooks/useOrientationLock";
 
 const createIcon = (type) =>
   L.divIcon({

@@ -23,3 +23,5 @@ export const useOrientationLock = () => {
     // Tidak perlu unlock saat unmount agar tetap portrait selama sesi berkendara
   }, []);
 };
+
+export default useOrientationLock;
