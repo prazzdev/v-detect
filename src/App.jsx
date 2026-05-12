@@ -23,12 +23,44 @@ import { APP_SETTINGS } from "./config/appConfig";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useOrientationLock } from "./hooks/useOrientationLock";
 
-const createIcon = (type, rotation = 0) =>
+// const createIcon = (type, rotation = 0) =>
+//   L.divIcon({
+//     className: "custom-icon",
+//     html: `<div style="font-size: 24px; transition: transform 0.3s ease; transform: rotate(${rotation}deg); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3))">${type === "mobil" ? "🚗" : "🏍️"}</div>`,
+//     iconSize: [30, 30],
+//     iconAnchor: [15, 15],
+//   });
+const createIcon = (type, rotation = 0, label = "") =>
   L.divIcon({
     className: "custom-icon",
-    html: `<div style="font-size: 24px; transition: transform 0.3s ease; transform: rotate(${rotation}deg); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3))">${type === "mobil" ? "🚗" : "🏍️"}</div>`,
-    iconSize: [30, 30],
-    iconAnchor: [15, 15],
+    html: `
+      <div style="display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%);">
+        <div style="
+          background: rgba(255, 255, 255, 0.9);
+          padding: 2px 6px;
+          border-radius: 4px;
+          border: 1px solid #cbd5e1;
+          font-family: monospace;
+          font-weight: 900;
+          font-size: 10px;
+          color: #1e293b;
+          white-space: nowrap;
+          margin-bottom: 2px;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        ">
+          ${label}
+        </div>
+        <div style="
+          font-size: 24px;
+          transition: transform 0.3s ease;
+          transform: rotate(${rotation}deg);
+          filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        ">
+          ${type === "mobil" ? "🚗" : "🏍️"}
+        </div>
+      </div>`,
+    iconSize: [0, 0], // Ukuran 0 agar titik jangkar (anchor) berada tepat di tengah konten flex
+    iconAnchor: [0, 0],
   });
 
 function RecenterMap({ position, isFollowUser, isDrivingMode, heading }) {
@@ -353,6 +385,7 @@ function App() {
                     icon={createIcon(
                       userData.vehicleType,
                       isDrivingMode ? userHeading : 0,
+                      userData.plateNumber.toUpperCase(),
                     )}
                   />
 
