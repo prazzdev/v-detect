@@ -8,6 +8,7 @@ import { useGPS } from "./hooks/useGPS";
 import RegistrationForm from "./components/RegistrationForm";
 import { supabase } from "./lib/supabaseClient";
 import { APP_SETTINGS } from "./config/appConfig";
+import { useWakeLock } from "./hooks/useWakeLock"; // Import hook Wake Lock
 
 const createIcon = (type) =>
   L.divIcon({
@@ -19,6 +20,7 @@ const createIcon = (type) =>
 
 function App() {
   const { position } = useGPS();
+  const isWakeLockActive = useWakeLock(); // Inisialisasi Wake Lock
   const [userData, setUserData] = useState(null);
   const [otherUsers, setOtherUsers] = useState([]);
   const [lastSentPos, setLastSentPos] = useState({ lat: 0, lng: 0 });
@@ -50,6 +52,7 @@ function App() {
     });
   }, []);
 
+  // 1. Sync Lokasi
   useEffect(() => {
     const sync = async () => {
       if (!position || !userData) return;
@@ -72,6 +75,7 @@ function App() {
     sync();
   }, [position, userData, lastSentPos]);
 
+  // 2. Realtime Subscription
   useEffect(() => {
     if (!userData) return;
 
@@ -108,6 +112,7 @@ function App() {
     };
   }, [userData, updateUsersList]);
 
+  // 3. Warning Logic
   useEffect(() => {
     if (!position || otherUsers.length === 0) {
       setIsWarningActive(false);
@@ -129,6 +134,22 @@ function App() {
     }
   }, [position, otherUsers, RADIUS_WARNING, playWarningSound]);
 
+  // 4. Tab Close Cleanup
+  useEffect(() => {
+    const handleTabClose = () => {
+      if (userData) {
+        const { plateNumber } = userData;
+        const blob = new Blob(
+          [JSON.stringify({ user_id: plateNumber.toUpperCase() })],
+          { type: "application/json" },
+        );
+      }
+    };
+
+    window.addEventListener("beforeunload", handleTabClose);
+    return () => window.removeEventListener("beforeunload", handleTabClose);
+  }, [userData]);
+
   if (!userData) return <RegistrationForm onRegister={setUserData} />;
 
   return (
@@ -136,6 +157,18 @@ function App() {
       className={`min-h-screen transition-colors duration-500 ${isWarningActive ? "bg-red-50" : "bg-slate-50"} p-4 font-sans text-slate-900`}
     >
       <div className="max-w-lg mx-auto space-y-4">
+        {/* Status Bar Indikator Wake Lock */}
+        <div className="flex justify-end px-2">
+          <div
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black tracking-tighter ${isWakeLockActive ? "bg-green-100 text-green-600" : "bg-slate-200 text-slate-500"}`}
+          >
+            <span
+              className={`w-1.5 h-1.5 rounded-full ${isWakeLockActive ? "bg-green-500 animate-pulse" : "bg-slate-400"}`}
+            ></span>
+            {isWakeLockActive ? "SCREEN ALWAYS ON" : "SCREEN AUTO-SLEEP"}
+          </div>
+        </div>
+
         {/* Warning Banner */}
         <div
           className={`overflow-hidden transition-all duration-500 ${isWarningActive ? "max-h-20 opacity-100" : "max-h-0 opacity-0"}`}
