@@ -9,7 +9,7 @@ import RegistrationForm from "./components/RegistrationForm";
 import { supabase } from "./lib/supabaseClient";
 import { APP_SETTINGS } from "./config/appConfig";
 import { useWakeLock } from "./hooks/useWakeLock";
-import { useOrientationLock } from "./hooks/useOrientationLock"; // Import hook baru
+import { useOrientationLock } from "./hooks/useOrientationLock";
 
 const createIcon = (type) =>
   L.divIcon({
@@ -22,7 +22,7 @@ const createIcon = (type) =>
 function App() {
   const { position } = useGPS();
   const isWakeLockActive = useWakeLock();
-  useOrientationLock(); // Inisialisasi Kunci Orientasi Layar (Nomor 3)
+  useOrientationLock();
 
   const [userData, setUserData] = useState(null);
   const [otherUsers, setOtherUsers] = useState([]);
@@ -34,9 +34,16 @@ function App() {
   );
   const RADIUS_WARNING = APP_SETTINGS?.RADIUS_WARNING || 30;
 
-  const playWarningSound = useCallback(() => {
+  // Fungsi Peringatan (Suara + Getar)
+  const playWarningEffects = useCallback(() => {
+    // 1. Putar Suara
     audioRef.current.currentTime = 0;
     audioRef.current.play().catch(() => {});
+
+    // 2. Trigger Getar (Hanya jika didukung perangkat)
+    if ("vibrate" in navigator) {
+      navigator.vibrate(200); // Bergetar selama 200ms
+    }
   }, []);
 
   const updateUsersList = useCallback((newUser) => {
@@ -55,7 +62,7 @@ function App() {
     });
   }, []);
 
-  // 1. Sync Lokasi
+  // 1. Sync Lokasi (Disesuaikan agar tidak terlalu sensitif terhadap noise)
   useEffect(() => {
     const sync = async () => {
       if (!position || !userData) return;
@@ -64,7 +71,9 @@ function App() {
           Math.pow(position.lng - lastSentPos.lng, 2),
       );
 
-      if (d > 0.00001) {
+      // Ambang batas ditingkatkan menjadi 0.00005 (~5-6 meter)
+      // untuk mencegah pemborosan database akibat noise sensor.
+      if (d > 0.00005) {
         await supabase.from("active_users").upsert({
           user_id: userData.plateNumber.toUpperCase(),
           lat: position.lat,
@@ -130,12 +139,15 @@ function App() {
     if (minDistance <= RADIUS_WARNING) {
       setIsWarningActive(true);
       const intervalTime = minDistance <= 10 ? 300 : 800;
-      const beepInterval = setInterval(() => playWarningSound(), intervalTime);
-      return () => clearInterval(beepInterval);
+      const warningInterval = setInterval(
+        () => playWarningEffects(),
+        intervalTime,
+      );
+      return () => clearInterval(warningInterval);
     } else {
       setIsWarningActive(false);
     }
-  }, [position, otherUsers, RADIUS_WARNING, playWarningSound]);
+  }, [position, otherUsers, RADIUS_WARNING, playWarningEffects]);
 
   // 4. Tab Close Cleanup
   useEffect(() => {
@@ -197,7 +209,7 @@ function App() {
             </div>
           </div>
           <button
-            onClick={playWarningSound}
+            onClick={playWarningEffects}
             className="p-2 bg-slate-100 rounded-xl hover:bg-blue-50 transition-colors"
           >
             🔊
