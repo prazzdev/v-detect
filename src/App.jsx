@@ -15,6 +15,7 @@ import {
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { Power } from "lucide-react";
 import { getDistance, getRhumbLineBearing } from "geolib";
 import { useGPS } from "./hooks/useGPS";
 import RegistrationForm from "./components/RegistrationForm";
@@ -23,56 +24,34 @@ import { APP_SETTINGS } from "./config/appConfig";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useOrientationLock } from "./hooks/useOrientationLock";
 
-// const createIcon = (type, rotation = 0) =>
-//   L.divIcon({
-//     className: "custom-icon",
-//     html: `<div style="font-size: 24px; transition: transform 0.3s ease; transform: rotate(${rotation}deg); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3))">${type === "mobil" ? "🚗" : "🏍️"}</div>`,
-//     iconSize: [30, 30],
-//     iconAnchor: [15, 15],
-//   });
-const createIcon = (type, rotation = 0, label = "") =>
+const createIcon = (type, rotation = 0, label = "", isSelf = false) =>
   L.divIcon({
     className: "custom-icon",
     html: `
       <div style="display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%);">
-        <div style="
-          background: rgba(255, 255, 255, 0.9);
-          padding: 2px 6px;
-          border-radius: 4px;
-          border: 1px solid #cbd5e1;
-          font-family: monospace;
-          font-weight: 900;
-          font-size: 10px;
-          color: #1e293b;
-          white-space: nowrap;
-          margin-bottom: 2px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        ">
-          ${label}
-        </div>
-        <div style="
-          font-size: 24px;
-          transition: transform 0.3s ease;
-          transform: rotate(${rotation}deg);
-          filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
-        ">
+        ${
+          isSelf && label
+            ? `<div style="background: rgba(255, 255, 255, 0.9); padding: 2px 6px; border-radius: 4px; border: 1px solid #cbd5e1; font-family: monospace; font-weight: 900; font-size: 10px; color: #1e293b; white-space: nowrap; margin-bottom: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">${label}</div>`
+            : ""
+        }
+        <div style="font-size: 24px; transition: transform 0.3s ease; transform: rotate(${rotation}deg); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)) ${
+          isSelf ? "hue-rotate(180deg) brightness(1.2)" : ""
+        };">
           ${type === "mobil" ? "🚗" : "🏍️"}
         </div>
       </div>`,
-    iconSize: [0, 0], // Ukuran 0 agar titik jangkar (anchor) berada tepat di tengah konten flex
+    iconSize: [0, 0],
     iconAnchor: [0, 0],
   });
 
 function RecenterMap({ position, isFollowUser, isDrivingMode, heading }) {
   const map = useMap();
-
   useEffect(() => {
     if (position && isFollowUser) {
       const targetZoom = isDrivingMode ? 19 : 17;
       map.setView([position.lat, position.lng], targetZoom, { animate: true });
     }
   }, [position, isFollowUser, isDrivingMode, map]);
-
   return null;
 }
 
@@ -82,16 +61,16 @@ function App() {
   useOrientationLock();
 
   const [userData, setUserData] = useState(null);
+  const [isActive, setIsActive] = useState(false); // State baru untuk tombol On/Off
   const [otherUsers, setOtherUsers] = useState([]);
   const [isFollowUser, setIsFollowUser] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isDrivingMode, setIsDrivingMode] = useState(false);
   const [isPowerSaving, setIsPowerSaving] = useState(false);
-
-  // State baru untuk UI Map
   const [isSatellite, setIsSatellite] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const appRef = useRef(null); // Ref untuk fullscreen kontainer
+  const appRef = useRef(null);
+  const inactivityTimer = useRef(null);
 
   const [lastSentPos, setLastSentPos] = useState({
     lat: 0,
@@ -100,16 +79,48 @@ function App() {
     heading: 0,
   });
 
-  const userHeading = useMemo(() => {
-    if (position?.heading !== null && position?.heading !== undefined) {
-      return position.heading;
+  // Fungsi untuk menghapus data dari Supabase (Cleanup)
+  const removeMeFromRadar = useCallback(async () => {
+    if (!userData) return;
+    await supabase
+      .from("active_users")
+      .delete()
+      .eq("user_id", userData.plateNumber.toUpperCase());
+  }, [userData]);
+
+  // Handle Toggle Button Manual
+  const toggleTracking = async () => {
+    const newState = !isActive;
+    setIsActive(newState);
+    if (!newState) {
+      await removeMeFromRadar();
+      clearTimeout(inactivityTimer.current);
     }
+  };
+
+  // Logic Safety Timeout (60 detik tidak bergerak = Off)
+  useEffect(() => {
+    if (isActive && position) {
+      clearTimeout(inactivityTimer.current);
+      inactivityTimer.current = setTimeout(() => {
+        setIsActive(false);
+        removeMeFromRadar();
+        alert("Radar dinonaktifkan otomatis karena tidak ada pergerakan.");
+      }, 60000); // 60 detik
+    }
+    return () => clearTimeout(inactivityTimer.current);
+  }, [position, isActive, removeMeFromRadar]);
+
+  const userHeading = useMemo(() => {
+    if (position?.heading !== null && position?.heading !== undefined)
+      return position.heading;
     if (lastSentPos.lat !== 0 && position) {
-      const bearing = getRhumbLineBearing(
-        { latitude: lastSentPos.lat, longitude: lastSentPos.lng },
-        { latitude: position.lat, longitude: position.lng },
+      return (
+        getRhumbLineBearing(
+          { latitude: lastSentPos.lat, longitude: lastSentPos.lng },
+          { latitude: position.lat, longitude: position.lng },
+        ) || 0
       );
-      return bearing || 0;
     }
     return 0;
   }, [position, lastSentPos]);
@@ -120,12 +131,9 @@ function App() {
   );
   const RADIUS_WARNING = APP_SETTINGS?.RADIUS_WARNING || 30;
 
-  // Toggle Fullscreen Function
   const toggleFullscreen = () => {
     if (!document.fullscreenElement) {
-      appRef.current.requestFullscreen().catch((err) => {
-        alert(`Error attempting to enable fullscreen: ${err.message}`);
-      });
+      appRef.current.requestFullscreen().catch((err) => alert(err.message));
       setIsFullscreen(true);
     } else {
       document.exitFullscreen();
@@ -171,9 +179,10 @@ function App() {
     });
   }, []);
 
+  // Sync Data ke Supabase (Hanya jika isActive)
   useEffect(() => {
     const sync = async () => {
-      if (!position || !userData || !isOnline) return;
+      if (!position || !userData || !isOnline || !isActive) return;
       const now = new Date();
       const timeDiff = (now.getTime() - lastSentPos.timestamp) / 1000;
       const minTime = isPowerSaving ? 60 : 30;
@@ -200,7 +209,7 @@ function App() {
       }
     };
     sync();
-  }, [position, userData, lastSentPos, isOnline, isPowerSaving]);
+  }, [position, userData, lastSentPos, isOnline, isPowerSaving, isActive]);
 
   useEffect(() => {
     if (!userData) return;
@@ -232,7 +241,7 @@ function App() {
   }, [userData, updateUsersList]);
 
   useEffect(() => {
-    if (!position || otherUsers.length === 0) {
+    if (!position || otherUsers.length === 0 || !isActive) {
       setIsWarningActive(false);
       return;
     }
@@ -252,7 +261,7 @@ function App() {
     } else {
       setIsWarningActive(false);
     }
-  }, [position, otherUsers, RADIUS_WARNING, playWarningEffects]);
+  }, [position, otherUsers, RADIUS_WARNING, playWarningEffects, isActive]);
 
   return (
     <div
@@ -262,7 +271,9 @@ function App() {
       {!userData ? (
         <RegistrationForm onRegister={setUserData} />
       ) : (
-        <div className="max-w-lg mx-auto space-y-4 pb-10">
+        <div className="max-w-lg mx-auto space-y-4 pb-24">
+          {" "}
+          {/* Tambah padding bottom agar tombol tidak menutupi list */}
           {/* Status Bar */}
           <div className="flex justify-between items-center px-2">
             <div
@@ -270,7 +281,6 @@ function App() {
             >
               {isOnline ? "● ONLINE" : "○ OFFLINE"}
             </div>
-
             <div className="flex gap-2">
               <button
                 onClick={() => setIsPowerSaving(!isPowerSaving)}
@@ -285,25 +295,8 @@ function App() {
                 {isFullscreen ? "EXIT FULL" : "FULLSCREEN"}
               </button>
             </div>
-
-            <div
-              className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black tracking-tighter ${isWakeLockActive ? "bg-green-100 text-green-600" : "bg-slate-200 text-slate-500"}`}
-            >
-              <span
-                className={`w-1.5 h-1.5 rounded-full ${isWakeLockActive ? "bg-green-500 animate-pulse" : "bg-slate-400"}`}
-              ></span>
-              {isWakeLockActive ? "AWAKE" : "SLEEP"}
-            </div>
           </div>
-
-          {/* Banner Peringatan Offline */}
-          {!isOnline && (
-            <div className="bg-orange-600 text-white p-2 rounded-2xl text-center font-black text-[10px] tracking-widest shadow-lg">
-              KONEKSI TERPUTUS: POSISI TIDAK TERUPDATE
-            </div>
-          )}
-
-          {/* Banner Bahaya */}
+          {/* Warning Banner */}
           <div
             className={`overflow-hidden transition-all duration-500 ${isWarningActive ? "max-h-20 opacity-100" : "max-h-0 opacity-0"}`}
           >
@@ -311,7 +304,6 @@ function App() {
               ⚠️ JARAK BERBAHAYA!
             </div>
           </div>
-
           {/* Profil Kendaraan */}
           <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -340,7 +332,6 @@ function App() {
               </span>
             </button>
           </div>
-
           {/* Map Container */}
           <div
             className={`bg-white rounded-[2.5rem] p-2 shadow-xl border border-white relative overflow-hidden ${isFullscreen ? "h-[70vh]" : "h-[380px]"}`}
@@ -360,57 +351,54 @@ function App() {
                   className="h-full w-full rounded-[2rem]"
                   zoomControl={false}
                 >
-                  {/* Zoom Control di Atas Kiri */}
-                  <ZoomControl position="topleft" />
-
-                  {/* Tile Layer Logic */}
                   <TileLayer
                     url={
                       isSatellite
                         ? "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
                         : "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
                     }
-                    attribution="&copy; ESRI / OpenStreetMap"
                   />
-
                   <RecenterMap
                     position={position}
                     isFollowUser={isFollowUser}
                     isDrivingMode={isDrivingMode}
                     heading={userHeading}
                   />
-
                   <Marker
                     position={[position.lat, position.lng]}
                     icon={createIcon(
                       userData.vehicleType,
                       isDrivingMode ? userHeading : 0,
                       userData.plateNumber.toUpperCase(),
+                      true,
                     )}
                   />
-
-                  <Circle
-                    center={[position.lat, position.lng]}
-                    radius={RADIUS_WARNING}
-                    pathOptions={{
-                      fillColor: "red",
-                      color: "red",
-                      weight: 1,
-                      opacity: 0.2,
-                      fillOpacity: 0.05,
-                    }}
-                  />
-
-                  {otherUsers.map((user) => (
-                    <Marker
-                      key={user.user_id}
-                      position={[user.lat, user.lng]}
-                      icon={createIcon(
-                        user.vehicle_type,
-                        isDrivingMode ? userHeading : 0,
-                      )}
+                  {isActive && (
+                    <Circle
+                      center={[position.lat, position.lng]}
+                      radius={RADIUS_WARNING}
+                      pathOptions={{
+                        fillColor: "red",
+                        color: "red",
+                        weight: 1,
+                        opacity: 0.2,
+                        fillOpacity: 0.05,
+                      }}
                     />
-                  ))}
+                  )}
+                  {isActive &&
+                    otherUsers.map((user) => (
+                      <Marker
+                        key={user.user_id}
+                        position={[user.lat, user.lng]}
+                        icon={createIcon(
+                          user.vehicle_type,
+                          isDrivingMode ? userHeading : 0,
+                          "",
+                          false,
+                        )}
+                      />
+                    ))}
                 </MapContainer>
               </div>
             ) : (
@@ -421,71 +409,118 @@ function App() {
                 </p>
               </div>
             )}
-
-            {/* Toggle Satelit di Kanan Atas dalam Map */}
             <button
               onClick={() => setIsSatellite(!isSatellite)}
               className="absolute top-4 right-4 z-[1000] bg-white/90 p-2 rounded-xl shadow-md border border-slate-200 text-[9px] font-black"
             >
               {isSatellite ? "🗺️ ROAD" : "🛰️ SATELLITE"}
             </button>
-
-            {/* Kontrol Kunci Map */}
-            <button
-              onClick={() => setIsFollowUser(!isFollowUser)}
-              className={`absolute bottom-6 right-6 z-[1000] px-4 py-2 rounded-full shadow-lg font-black text-[10px] tracking-widest border transition-all duration-300 ${isFollowUser ? "bg-blue-600 text-white border-blue-400" : "bg-white text-slate-400 border-slate-200"}`}
-            >
-              {isFollowUser ? "🔒 LOCKED" : "🔓 FREE"}
-            </button>
           </div>
-
           {/* List Kendaraan */}
           <div className="space-y-2">
             <h3 className="text-[10px] font-black text-slate-400 px-2 tracking-[0.2em]">
               KENDARAAN TERDEKAT
             </h3>
-            <div className="grid grid-cols-1 gap-2">
-              {otherUsers.length === 0 ? (
-                <p className="text-center py-4 text-xs text-slate-400 italic bg-white/40 rounded-2xl border border-dashed border-slate-200">
-                  Tidak ada kendaraan di sekitar
+            {!isActive ? (
+              <div className="p-8 text-center bg-slate-100 rounded-[2rem] border-2 border-dashed border-slate-200">
+                <p className="text-xs font-bold text-slate-400">
+                  AKTIFKAN RADAR UNTUK MELIHAT SEKITAR
                 </p>
-              ) : (
-                otherUsers.map((user) => {
-                  const distance = position
-                    ? getDistance(position, {
-                        latitude: user.lat,
-                        longitude: user.lng,
-                      })
-                    : null;
-                  const isDanger = distance <= RADIUS_WARNING;
-                  return (
-                    <div
-                      key={user.user_id}
-                      className={`p-4 rounded-2xl border flex justify-between items-center transition-all duration-500 ${isDanger ? "bg-white border-red-200 shadow-md shadow-red-50" : "bg-white/60 border-slate-100"}`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`text-xl p-2 rounded-xl ${isDanger ? "bg-red-100" : "bg-slate-100"}`}
-                        >
-                          {user.vehicle_type === "mobil" ? "🚗" : "🏍️"}
-                        </span>
-                        <p
-                          className={`font-mono font-bold text-sm ${isDanger ? "text-red-600" : "text-slate-600"}`}
-                        >
-                          {user.user_id}
-                        </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-2">
+                {otherUsers.length === 0 ? (
+                  <p className="text-center py-4 text-xs text-slate-400 italic">
+                    Tidak ada kendaraan di sekitar
+                  </p>
+                ) : (
+                  otherUsers.map((user) => {
+                    const distance = position
+                      ? getDistance(position, {
+                          latitude: user.lat,
+                          longitude: user.lng,
+                        })
+                      : null;
+                    const isDanger = distance <= RADIUS_WARNING;
+                    return (
+                      <div
+                        key={user.user_id}
+                        className={`p-4 rounded-2xl border flex justify-between items-center transition-all duration-500 ${isDanger ? "bg-white border-red-200 shadow-md shadow-red-50" : "bg-white/60 border-slate-100"}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`text-xl p-2 rounded-xl ${isDanger ? "bg-red-100" : "bg-slate-100"}`}
+                          >
+                            {user.vehicle_type === "mobil" ? "🚗" : "🏍️"}
+                          </span>
+                          <p
+                            className={`font-mono font-bold text-sm ${isDanger ? "text-red-600" : "text-slate-600"}`}
+                          >
+                            {user.user_id}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p
+                            className={`text-lg font-black tracking-tighter ${isDanger ? "text-red-600" : "text-blue-600"}`}
+                          >
+                            {distance} <span className="text-[10px]">M</span>
+                          </p>
+                        </div>
                       </div>
-                      <div className="text-right">
-                        <p
-                          className={`text-lg font-black tracking-tighter ${isDanger ? "text-red-600" : "text-blue-600"}`}
-                        >
-                          {distance} <span className="text-[10px]">M</span>
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+                    );
+                  })
+                )}
+              </div>
+            )}
+          </div>
+          {/* Tombol Besar On/Off (Floating Bottom) */}
+          <div className="fixed bottom-0 left-0 right-0 z-[2000]">
+            {/* Bar Background */}
+            <div className="relative h-20 bg-white border-t border-slate-200 shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)] flex justify-center items-center">
+              {/* Container Tombol yang Menonjol Keluar */}
+              <div className="absolute -top-10 flex flex-col items-center">
+                <button
+                  onClick={toggleTracking}
+                  className={`
+                              relative w-20 h-20 rounded-full flex items-center justify-center
+                              transition-all duration-300 active:scale-95
+                              border-[6px] border-slate-50
+                              ${
+                                isActive
+                                  ? "bg-emerald-500 shadow-[0_8px_25px_rgba(16,185,129,0.4)]"
+                                  : "bg-white shadow-[0_8px_25px_rgba(0,0,0,0.1)]"
+                              }
+                            `}
+                >
+                  <Power
+                    size={32}
+                    strokeWidth={2.5}
+                    className={`transition-colors duration-300 ${isActive ? "text-white" : "text-slate-300"}`}
+                  />
+
+                  {/* Kilatan Cahaya halus di bagian atas tombol */}
+                  <div className="absolute top-2 w-10 h-5 bg-white/20 rounded-full blur-[2px]"></div>
+                </button>
+
+                {/* Label Status di bawah tombol */}
+                <div className="mt-2">
+                  <span
+                    className={`text-[10px] font-black tracking-[0.15em] uppercase px-3 py-0.5 rounded-full bg-white/80 backdrop-blur-sm shadow-sm border ${isActive ? "text-emerald-600 border-emerald-100" : "text-slate-400 border-slate-100"}`}
+                  >
+                    {isActive ? "ACTIVE" : "OFFLINE"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Area kosong di kiri & kanan tombol bisa dipakai untuk info tambahan jika perlu */}
+              <div className="w-full flex justify-between px-10">
+                <div className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">
+                  System v1.0
+                </div>
+                <div className="text-[8px] font-bold text-slate-300 uppercase tracking-widest">
+                  {userData?.plateNumber.toUpperCase()}
+                </div>
+              </div>
             </div>
           </div>
         </div>
