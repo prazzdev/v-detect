@@ -12,8 +12,20 @@
     width: 100%;
     height: 100%;
     z-index: 1;
+    /* Tambahkan transition agar rotasi peta halus */
+    transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+/* Container untuk rotasi */
+.driving-perspective {
+    transform-origin: center center;
+    overflow: visible !important;
+}
+
+/* Pastikan marker tetap smooth saat posisi update */
 .leaflet-marker-icon {
-    transition: all 0.8s linear;
+    transition:
+        transform 0.3s linear,
+        top 0.3s linear,
+        left 0.3s linear !important;
 }

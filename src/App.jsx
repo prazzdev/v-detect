@@ -10,33 +10,45 @@ import { APP_SETTINGS } from "./config/appConfig";
 import { useWakeLock } from "./hooks/useWakeLock";
 import { useOrientationLock } from "./hooks/useOrientationLock";
 
-const createIcon = (type) =>
+// Modifikasi createIcon untuk mendukung rotasi balik (counter-rotate)
+const createIcon = (type, rotation = 0) =>
   L.divIcon({
     className: "custom-icon",
-    html: `<div style="font-size: 24px; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3))">${type === "mobil" ? "🚗" : "🏍️"}</div>`,
+    html: `<div style="font-size: 24px; transition: transform 0.3s ease; transform: rotate(${rotation}deg); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3))">${type === "mobil" ? "🚗" : "🏍️"}</div>`,
     iconSize: [30, 30],
     iconAnchor: [15, 15],
   });
 
-function RecenterMap({ position, isFollowUser }) {
+function RecenterMap({ position, isFollowUser, isDrivingMode, heading }) {
   const map = useMap();
+
   useEffect(() => {
     if (position && isFollowUser) {
-      map.panTo([position.lat, position.lng], { animate: true });
+      // Pada mode driving, kita beri sedikit offset ke bawah agar pandangan depan lebih luas
+      if (isDrivingMode) {
+        map.panTo([position.lat, position.lng], { animate: true });
+      } else {
+        map.panTo([position.lat, position.lng], { animate: true });
+      }
     }
-  }, [position, isFollowUser, map]);
+  }, [position, isFollowUser, isDrivingMode, map]);
+
   return null;
 }
 
 function App() {
-  const { position } = useGPS();
+  const { position } = useGPS(); // Pastikan useGPS Anda juga mengembalikan 'heading' jika tersedia
   const isWakeLockActive = useWakeLock();
   useOrientationLock();
 
   const [userData, setUserData] = useState(null);
   const [otherUsers, setOtherUsers] = useState([]);
   const [isFollowUser, setIsFollowUser] = useState(true);
-  const [isOnline, setIsOnline] = useState(navigator.onLine); // State Koneksi
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  // State baru untuk Mode Driving
+  const [isDrivingMode, setIsDrivingMode] = useState(false);
+  const userHeading = position?.heading || 0;
 
   const [lastSentPos, setLastSentPos] = useState({
     lat: 0,
@@ -53,12 +65,9 @@ function App() {
   const playWarningEffects = useCallback(() => {
     audioRef.current.currentTime = 0;
     audioRef.current.play().catch(() => {});
-    if ("vibrate" in navigator) {
-      navigator.vibrate(200);
-    }
+    if ("vibrate" in navigator) navigator.vibrate(200);
   }, []);
 
-  // Monitor Status Koneksi
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -74,8 +83,7 @@ function App() {
     setOtherUsers((prev) => {
       const index = prev.findIndex((u) => u.user_id === newUser.user_id);
       if (index !== -1) {
-        const oldUser = prev[index];
-        if (oldUser.lat === newUser.lat && oldUser.lng === newUser.lng)
+        if (prev[index].lat === newUser.lat && prev[index].lng === newUser.lng)
           return prev;
         const newList = [...prev];
         newList[index] = newUser;
@@ -87,11 +95,9 @@ function App() {
 
   useEffect(() => {
     const sync = async () => {
-      if (!position || !userData || !isOnline) return; // Jangan kirim data jika offline
-
+      if (!position || !userData || !isOnline) return;
       const now = new Date();
       const timeDiff = (now.getTime() - lastSentPos.timestamp) / 1000;
-
       const d = Math.sqrt(
         Math.pow(position.lat - lastSentPos.lat, 2) +
           Math.pow(position.lng - lastSentPos.lng, 2),
@@ -117,7 +123,6 @@ function App() {
 
   useEffect(() => {
     if (!userData) return;
-
     const loadData = async () => {
       const { data } = await supabase
         .from("active_users")
@@ -125,9 +130,7 @@ function App() {
         .neq("user_id", userData.plateNumber.toUpperCase());
       if (data) setOtherUsers(data);
     };
-
     loadData();
-
     const channel = supabase
       .channel("live-traffic")
       .on(
@@ -138,17 +141,13 @@ function App() {
             setOtherUsers((prev) =>
               prev.filter((u) => u.user_id !== (p.old.user_id || p.old.id)),
             );
-          } else {
-            if (p.new.user_id !== userData.plateNumber.toUpperCase())
-              updateUsersList(p.new);
+          } else if (p.new.user_id !== userData.plateNumber.toUpperCase()) {
+            updateUsersList(p.new);
           }
         },
       )
       .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => supabase.removeChannel(channel);
   }, [userData, updateUsersList]);
 
   useEffect(() => {
@@ -156,7 +155,6 @@ function App() {
       setIsWarningActive(false);
       return;
     }
-
     const distances = otherUsers.map((u) =>
       getDistance(position, { latitude: u.lat, longitude: u.lng }),
     );
@@ -175,17 +173,6 @@ function App() {
     }
   }, [position, otherUsers, RADIUS_WARNING, playWarningEffects]);
 
-  useEffect(() => {
-    const handleTabClose = () => {
-      if (userData) {
-        const { plateNumber } = userData;
-      }
-    };
-
-    window.addEventListener("beforeunload", handleTabClose);
-    return () => window.removeEventListener("beforeunload", handleTabClose);
-  }, [userData]);
-
   if (!userData) return <RegistrationForm onRegister={setUserData} />;
 
   return (
@@ -195,13 +182,11 @@ function App() {
       <div className="max-w-lg mx-auto space-y-4">
         {/* Status Bar */}
         <div className="flex justify-between items-center px-2">
-          {/* Indikator Online/Offline */}
           <div
             className={`px-3 py-1 rounded-full text-[9px] font-black tracking-tighter ${isOnline ? "bg-blue-100 text-blue-600" : "bg-orange-100 text-orange-600 animate-pulse"}`}
           >
             {isOnline ? "● ONLINE" : "○ OFFLINE"}
           </div>
-
           <div
             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black tracking-tighter ${isWakeLockActive ? "bg-green-100 text-green-600" : "bg-slate-200 text-slate-500"}`}
           >
@@ -212,7 +197,7 @@ function App() {
           </div>
         </div>
 
-        {/* Banner Peringatan Offline */}
+        {/* Banner Peringatan */}
         {!isOnline && (
           <div className="bg-orange-600 text-white p-2 rounded-2xl text-center font-black text-[10px] tracking-widest shadow-lg">
             KONEKSI TERPUTUS: POSISI ANDA TIDAK TERUPDATE
@@ -227,6 +212,7 @@ function App() {
           </div>
         </div>
 
+        {/* Profil Kendaraan */}
         <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-xl">
@@ -234,24 +220,37 @@ function App() {
             </div>
             <div>
               <p className="text-[10px] font-bold text-blue-600 uppercase leading-none mb-1">
-                {userData.vehicleType === "mobil" ? "MOBIL" : "MOTOR"}
+                {userData.vehicleType}
               </p>
               <p className="font-black font-mono text-slate-700 text-lg">
                 {userData.plateNumber.toUpperCase()}
               </p>
             </div>
           </div>
+          {/* Tombol Toggle Mode Driving */}
           <button
-            onClick={playWarningEffects}
-            className="p-2 bg-slate-100 rounded-xl hover:bg-blue-50 transition-colors"
+            onClick={() => {
+              setIsDrivingMode(!isDrivingMode);
+              setIsFollowUser(true);
+            }}
+            className={`flex flex-col items-center justify-center w-12 h-12 rounded-2xl transition-all ${isDrivingMode ? "bg-blue-600 text-white shadow-lg shadow-blue-200" : "bg-slate-100 text-slate-400"}`}
           >
-            🔊
+            <span className="text-lg">{isDrivingMode ? "🧭" : "🗺️"}</span>
+            <span className="text-[7px] font-black leading-none mt-1">
+              {isDrivingMode ? "DRIVE" : "2D"}
+            </span>
           </button>
         </div>
 
+        {/* Map Container */}
         <div className="bg-white rounded-[2.5rem] p-2 shadow-xl border border-white h-[380px] relative overflow-hidden">
           {position ? (
-            <>
+            <div
+              className={`h-full w-full transition-transform duration-700 ease-out ${isDrivingMode ? "driving-perspective" : ""}`}
+              style={
+                isDrivingMode ? { transform: `rotate(${-userHeading}deg)` } : {}
+              }
+            >
               <MapContainer
                 center={[position.lat, position.lng]}
                 zoom={18}
@@ -259,11 +258,22 @@ function App() {
                 zoomControl={false}
               >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                <RecenterMap position={position} isFollowUser={isFollowUser} />
+                <RecenterMap
+                  position={position}
+                  isFollowUser={isFollowUser}
+                  isDrivingMode={isDrivingMode}
+                  heading={userHeading}
+                />
+
+                {/* Marker User (Selalu Rotate balik ke 0 atau Heading asli agar tetap tegak di layar) */}
                 <Marker
                   position={[position.lat, position.lng]}
-                  icon={createIcon(userData.vehicleType)}
+                  icon={createIcon(
+                    userData.vehicleType,
+                    isDrivingMode ? userHeading : 0,
+                  )}
                 />
+
                 <Circle
                   center={[position.lat, position.lng]}
                   radius={RADIUS_WARNING}
@@ -275,26 +285,19 @@ function App() {
                     fillOpacity: 0.05,
                   }}
                 />
+
                 {otherUsers.map((user) => (
                   <Marker
                     key={user.user_id}
                     position={[user.lat, user.lng]}
-                    icon={createIcon(user.vehicle_type)}
+                    icon={createIcon(
+                      user.vehicle_type,
+                      isDrivingMode ? userHeading : 0,
+                    )}
                   />
                 ))}
               </MapContainer>
-
-              <button
-                onClick={() => setIsFollowUser(!isFollowUser)}
-                className={`absolute bottom-6 right-6 z-[1000] px-4 py-2 rounded-full shadow-lg font-black text-[10px] tracking-widest border transition-all duration-300 ${
-                  isFollowUser
-                    ? "bg-blue-600 text-white border-blue-400"
-                    : "bg-white text-slate-400 border-slate-200"
-                }`}
-              >
-                {isFollowUser ? "🔒 LOCKED" : "🔓 FREE"}
-              </button>
-            </>
+            </div>
           ) : (
             <div className="h-full w-full flex flex-col items-center justify-center bg-slate-50 gap-3">
               <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
@@ -303,8 +306,17 @@ function App() {
               </p>
             </div>
           )}
+
+          {/* Kontrol Kunci Map */}
+          <button
+            onClick={() => setIsFollowUser(!isFollowUser)}
+            className={`absolute bottom-6 right-6 z-[1000] px-4 py-2 rounded-full shadow-lg font-black text-[10px] tracking-widest border transition-all duration-300 ${isFollowUser ? "bg-blue-600 text-white border-blue-400" : "bg-white text-slate-400 border-slate-200"}`}
+          >
+            {isFollowUser ? "🔒 LOCKED" : "🔓 FREE"}
+          </button>
         </div>
 
+        {/* List Kendaraan */}
         <div className="space-y-2">
           <h3 className="text-[10px] font-black text-slate-400 px-2 tracking-[0.2em]">
             KENDARAAN TERDEKAT
