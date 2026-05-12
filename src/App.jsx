@@ -338,10 +338,10 @@ function App() {
       title: "<strong>Panduan Radar</strong>",
       icon: "info",
       html: `
-          <div style="text-align: left; font-size: 0.9rem; line-height: 1.6; color: #475569;">
+          <div style="text-align: left; font-size: 0.9rem; line-height: 1.6; color: #475569; margin-top: -10px;">
             <ul style="list-style-type: none; padding-left: 0;">
               <li style="margin-bottom: 8px;">🚀 <b>Aktifkan Radar:</b> Tekan tombol power di tengah bawah.</li>
-              <li style="margin-bottom: 8px;">🛰️ <b>Berbagi Lokasi:</b> Data Anda akan terhapus otomatis jika tidak bergerak dalam 1 menit.</li>
+              <li style="margin-bottom: 8px;">🛰️ <b>Berbagi Lokasi:</b> Data lokasi otomatis terhapus jika tidak bergerak dalam 1 menit.</li>
               <li style="margin-bottom: 8px;">🧭 <b>Mode Drive:</b> Tekan ikon kompas untuk memutar peta sesuai arah hadap Anda.</li>
               <li style="margin-bottom: 8px;">⚠️ <b>Peringatan:</b> Radar akan berbunyi dan bergetar jika jarak kendaraan lain di bawah 30 meter.</li>
             </ul>
@@ -350,6 +350,24 @@ function App() {
       confirmButtonText: "Mengerti",
       confirmButtonColor: "#2563eb",
       borderRadius: "1.5rem",
+      // Menaikkan posisi modal agar tidak terbentur navbar
+      position: "center",
+      padding: "0 0 3rem 0", // Menambah ruang kosong di bawah modal (dalam modal)
+      didOpen: () => {
+        const icon = document.querySelector(".swal2-icon.swal2-info");
+        const container = document.querySelector(".swal2-html-container");
+        const actions = document.querySelector(".swal2-actions");
+
+        if (icon) {
+          icon.style.transform = "scale(0.5)";
+          icon.style.marginTop = "10px";
+          icon.style.marginBottom = "-15px";
+        }
+
+        // Menaikkan konten teks dan tombol konfirmasi
+        if (container) container.style.marginTop = "0px";
+        if (actions) actions.style.marginTop = "5px";
+      },
     });
   };
 
