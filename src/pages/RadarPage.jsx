@@ -12,6 +12,7 @@ import {
   Circle,
   useMap,
   ZoomControl,
+  Tooltip,
 } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
@@ -26,31 +27,19 @@ import { useWakeLock } from "../hooks/useWakeLock";
 import { useOrientationLock } from "../hooks/useOrientationLock";
 
 // Custom Icon Generator untuk Persimpangan (Lebih Organik & Mahal)
-const createIntersectionIcon = (name) =>
+const createIntersectionIcon = () =>
   L.divIcon({
     className: "intersection-icon",
     html: `
       <div style="display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%);">
         <div style="
-          width: 12px; height: 12px;
+          width: 10px; height: 10px;
           background: #3b82f6;
           border: 2px solid white;
           border-radius: 50%;
-          box-shadow: 0 0 15px rgba(59, 130, 246, 0.8);
+          box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
           animation: pulse-glow 2s infinite;
         "></div>
-        <div style="
-          margin-top: 4px;
-          background: rgba(255, 255, 255, 0.85);
-          backdrop-filter: blur(4px);
-          padding: 1px 6px;
-          border-radius: 10px;
-          font-size: 9px;
-          font-weight: 800;
-          color: #1e3a8a;
-          white-space: nowrap;
-          border: 1px solid rgba(59, 130, 246, 0.2);
-        ">${name}</div>
       </div>`,
     iconSize: [0, 0],
   });
@@ -476,7 +465,6 @@ function App() {
               </button>
             </div>
           </div>
-
           <div
             className={`overflow-hidden transition-all duration-500 ${isWarningActive ? "max-h-20 opacity-100" : "max-h-0 opacity-0"}`}
           >
@@ -484,7 +472,6 @@ function App() {
               ⚠️ JARAK BERBAHAYA!
             </div>
           </div>
-
           <div className="bg-white p-4 rounded-3xl shadow-sm border border-slate-200 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-blue-100 rounded-xl flex items-center justify-center text-xl">
@@ -512,7 +499,6 @@ function App() {
               </span>
             </button>
           </div>
-
           <div
             className={`bg-white rounded-[2.5rem] p-2 shadow-xl border border-white relative overflow-hidden ${isFullscreen ? "h-[70vh]" : "h-[380px]"}`}
           >
@@ -550,8 +536,23 @@ function App() {
                     <Marker
                       key={poi.id}
                       position={[poi.lat, poi.lng]}
-                      icon={createIntersectionIcon(poi.name)}
-                    />
+                      icon={createIntersectionIcon()} // Panggil icon tanpa label
+                    >
+                      {/* Tooltip akan muncul saat marker diklik/di-hover */}
+                      <Tooltip
+                        direction="top"
+                        offset={[0, -10]}
+                        opacity={1}
+                        className="custom-tooltip"
+                      >
+                        <div className="bg-white/90 backdrop-blur-md px-3 py-1 rounded-2xl text-[10px] font-black text-slate-800 border border-white shadow-[0_4px_12px_rgba(0,0,0,0.1)] flex items-center gap-2 whitespace-nowrap">
+                          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full shadow-[0_0_4px_rgba(59,130,246,0.5)]"></div>
+                          <span className="tracking-tight uppercase">
+                            {poi.name}
+                          </span>
+                        </div>
+                      </Tooltip>
+                    </Marker>
                   ))}
 
                   {/* My Marker */}
@@ -624,7 +625,6 @@ function App() {
               {isSatellite ? "🗺️ ROAD" : "🛰️ SATELLITE"}
             </button>
           </div>
-
           {/* <div className="space-y-2">
             <h3 className="text-[10px] font-black text-slate-400 px-2 tracking-[0.2em]">
               KENDARAAN TERDEKAT
@@ -816,7 +816,7 @@ function App() {
               </div>
             )}
           </div>
-
+          // NAVBAR
           <div className="fixed bottom-0 left-0 right-0 z-[2000]">
             <div className="relative h-20 bg-white border-t border-slate-200 shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)] flex justify-center items-center">
               <div className="absolute -top-10 flex flex-col items-center">
