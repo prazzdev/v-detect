@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { MapContainer, TileLayer, Marker, Circle, useMap } from "react-leaflet"; // Tambahkan useMap
+import { MapContainer, TileLayer, Marker, Circle, useMap } from "react-leaflet";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { getDistance } from "geolib";
@@ -18,7 +18,6 @@ const createIcon = (type) =>
     iconAnchor: [15, 15],
   });
 
-// Komponen pembantu untuk memindahkan pusat peta secara otomatis
 function RecenterMap({ position, isFollowUser }) {
   const map = useMap();
   useEffect(() => {
@@ -36,7 +35,8 @@ function App() {
 
   const [userData, setUserData] = useState(null);
   const [otherUsers, setOtherUsers] = useState([]);
-  const [isFollowUser, setIsFollowUser] = useState(true); // State untuk kontrol kamera
+  const [isFollowUser, setIsFollowUser] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine); // State Koneksi
 
   const [lastSentPos, setLastSentPos] = useState({
     lat: 0,
@@ -58,6 +58,18 @@ function App() {
     }
   }, []);
 
+  // Monitor Status Koneksi
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
   const updateUsersList = useCallback((newUser) => {
     setOtherUsers((prev) => {
       const index = prev.findIndex((u) => u.user_id === newUser.user_id);
@@ -75,7 +87,7 @@ function App() {
 
   useEffect(() => {
     const sync = async () => {
-      if (!position || !userData) return;
+      if (!position || !userData || !isOnline) return; // Jangan kirim data jika offline
 
       const now = new Date();
       const timeDiff = (now.getTime() - lastSentPos.timestamp) / 1000;
@@ -101,7 +113,7 @@ function App() {
       }
     };
     sync();
-  }, [position, userData, lastSentPos]);
+  }, [position, userData, lastSentPos, isOnline]);
 
   useEffect(() => {
     if (!userData) return;
@@ -181,7 +193,15 @@ function App() {
       className={`min-h-screen transition-colors duration-500 ${isWarningActive ? "bg-red-50" : "bg-slate-50"} p-4 font-sans text-slate-900`}
     >
       <div className="max-w-lg mx-auto space-y-4">
-        <div className="flex justify-end px-2">
+        {/* Status Bar */}
+        <div className="flex justify-between items-center px-2">
+          {/* Indikator Online/Offline */}
+          <div
+            className={`px-3 py-1 rounded-full text-[9px] font-black tracking-tighter ${isOnline ? "bg-blue-100 text-blue-600" : "bg-orange-100 text-orange-600 animate-pulse"}`}
+          >
+            {isOnline ? "● ONLINE" : "○ OFFLINE"}
+          </div>
+
           <div
             className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black tracking-tighter ${isWakeLockActive ? "bg-green-100 text-green-600" : "bg-slate-200 text-slate-500"}`}
           >
@@ -191,6 +211,13 @@ function App() {
             {isWakeLockActive ? "SCREEN ALWAYS ON" : "SCREEN AUTO-SLEEP"}
           </div>
         </div>
+
+        {/* Banner Peringatan Offline */}
+        {!isOnline && (
+          <div className="bg-orange-600 text-white p-2 rounded-2xl text-center font-black text-[10px] tracking-widest shadow-lg">
+            KONEKSI TERPUTUS: POSISI ANDA TIDAK TERUPDATE
+          </div>
+        )}
 
         <div
           className={`overflow-hidden transition-all duration-500 ${isWarningActive ? "max-h-20 opacity-100" : "max-h-0 opacity-0"}`}
@@ -222,7 +249,6 @@ function App() {
           </button>
         </div>
 
-        {/* MAP RADAR DENGAN KONTROL KAMERA */}
         <div className="bg-white rounded-[2.5rem] p-2 shadow-xl border border-white h-[380px] relative overflow-hidden">
           {position ? (
             <>
@@ -233,10 +259,7 @@ function App() {
                 zoomControl={false}
               >
                 <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-
-                {/* Komponen Sinkronisasi Kamera */}
                 <RecenterMap position={position} isFollowUser={isFollowUser} />
-
                 <Marker
                   position={[position.lat, position.lng]}
                   icon={createIcon(userData.vehicleType)}
@@ -261,7 +284,6 @@ function App() {
                 ))}
               </MapContainer>
 
-              {/* Tombol Toggle Lock Kamera */}
               <button
                 onClick={() => setIsFollowUser(!isFollowUser)}
                 className={`absolute bottom-6 right-6 z-[1000] px-4 py-2 rounded-full shadow-lg font-black text-[10px] tracking-widest border transition-all duration-300 ${
