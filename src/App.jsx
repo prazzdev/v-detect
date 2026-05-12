@@ -30,8 +30,13 @@ const createIcon = (type, rotation = 0, label = "", isSelf = false) =>
     html: `
       <div style="display: flex; flex-direction: column; align-items: center; transform: translate(-50%, -50%);">
         ${
-          isSelf && label
-            ? `<div style="background: rgba(255, 255, 255, 0.9); padding: 2px 6px; border-radius: 4px; border: 1px solid #cbd5e1; font-family: monospace; font-weight: 900; font-size: 10px; color: #1e293b; white-space: nowrap; margin-bottom: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">${label}</div>`
+          label
+            ? `<div style="background: ${isSelf ? "rgba(255, 255, 255, 0.9)" : "rgba(30, 41, 59, 0.9)"};
+                padding: 2px 6px; border-radius: 4px;
+                border: 1px solid ${isSelf ? "#cbd5e1" : "#475569"};
+                font-family: monospace; font-weight: 900; font-size: 10px;
+                color: ${isSelf ? "#1e293b" : "#f8fafc"};
+                white-space: nowrap; margin-bottom: 2px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">${label}</div>`
             : ""
         }
         <div style="font-size: 24px; transition: transform 0.3s ease; transform: rotate(${rotation}deg); filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3)) ${
@@ -80,7 +85,6 @@ function App() {
     heading: 0,
   });
 
-  // Cek Sesi Login & Ambil Profil Kendaraan
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
@@ -434,8 +438,8 @@ function App() {
                         position={[user.lat, user.lng]}
                         icon={createIcon(
                           user.vehicle_type,
-                          isDrivingMode ? userHeading : 0,
-                          "",
+                          isDrivingMode ? 0 : 0, // Icon orang lain biasanya statis/menghadap utara jika data rotasi tidak ada
+                          user.user_id.toUpperCase(), // MENGEMBALIKAN LABEL DISINI
                           false,
                         )}
                       />
