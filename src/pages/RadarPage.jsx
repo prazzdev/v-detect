@@ -378,12 +378,13 @@ function App() {
       title: "<strong>Panduan Radar</strong>",
       icon: "info",
       html: `
-          <div style="text-align: left; font-size: 0.9rem; line-height: 1.6; color: #475569; margin-top: -10px;">
-            <ul style="list-style-type: none; padding-left: 0;">
-              <li style="margin-bottom: 8px;">🚀 <b>Aktifkan Radar:</b> Tekan tombol power di tengah bawah.</li>
-              <li style="margin-bottom: 8px;">🛰️ <b>Berbagi Lokasi:</b> Data lokasi otomatis terhapus jika tidak bergerak dalam 1 menit.</li>
-              <li style="margin-bottom: 8px;">🧭 <b>Mode Drive:</b> Tekan ikon kompas untuk memutar peta sesuai arah hadap Anda.</li>
-              <li style="margin-bottom: 8px;">⚠️ <b>Peringatan:</b> Radar akan berbunyi dan bergetar jika jarak kendaraan lain di bawah 30 meter.</li>
+          <div class="text-left text-[0.85rem] leading-relaxed text-slate-600 -mt-2">
+            <ul class="list-none p-0">
+              <li class="mb-2">🚀 <b>Aktifkan Radar:</b> Tekan tombol power di tengah bawah untuk mulai berbagi lokasi.</li>
+              <li class="mb-2">🛰️ <b>Berbagi Lokasi:</b> Data lokasi otomatis terhapus jika Anda tidak bergerak dalam 1 menit.</li>
+              <li class="mb-2">🧭 <b>Mode Drive:</b> Tekan ikon kompas untuk memutar peta sesuai arah hadap Anda.</li>
+              <li class="mb-2">🔵 <b>Titik Biru:</b> Merupakan persimpangan tanpa lampu lalu lintas. Harap kurangi kecepatan dan berhati-hati.</li>
+              <li class="mb-2">⚠️ <b>Peringatan:</b> Radar akan berbunyi dan bergetar jika jarak kendaraan lain di bawah 30 meter.</li>
             </ul>
           </div>
         `,
