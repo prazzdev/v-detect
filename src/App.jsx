@@ -8,7 +8,8 @@ import { useGPS } from "./hooks/useGPS";
 import RegistrationForm from "./components/RegistrationForm";
 import { supabase } from "./lib/supabaseClient";
 import { APP_SETTINGS } from "./config/appConfig";
-import { useWakeLock } from "./hooks/useWakeLock"; // Import hook Wake Lock
+import { useWakeLock } from "./hooks/useWakeLock";
+import { useOrientationLock } from "./hooks/useOrientationLock"; // Import hook baru
 
 const createIcon = (type) =>
   L.divIcon({
@@ -20,7 +21,9 @@ const createIcon = (type) =>
 
 function App() {
   const { position } = useGPS();
-  const isWakeLockActive = useWakeLock(); // Inisialisasi Wake Lock
+  const isWakeLockActive = useWakeLock();
+  useOrientationLock(); // Inisialisasi Kunci Orientasi Layar (Nomor 3)
+
   const [userData, setUserData] = useState(null);
   const [otherUsers, setOtherUsers] = useState([]);
   const [lastSentPos, setLastSentPos] = useState({ lat: 0, lng: 0 });
