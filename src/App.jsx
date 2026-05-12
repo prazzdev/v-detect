@@ -371,6 +371,18 @@ function App() {
     });
   };
 
+  const formatPlate = (plate) => {
+    if (!plate) return "...";
+    // Regex untuk memisahkan: (Huruf Depan) (Angka) (Huruf Belakang)
+    const regex = /^([A-Z]{1,2})(\d{1,4})([A-Z]{1,3})$/;
+    const match = plate.toUpperCase().replace(/\s/g, "").match(regex);
+
+    if (match) {
+      return `${match[1]} ${match[2]} ${match[3]}`;
+    }
+    return plate.toUpperCase(); // Fallback jika format tidak standar
+  };
+
   return (
     <div
       ref={appRef}
@@ -433,7 +445,7 @@ function App() {
                   {userData?.vehicleType || "loading..."}
                 </p>
                 <p className="font-black font-mono text-slate-700 text-lg">
-                  {userData?.plateNumber.toUpperCase() || "..."}
+                  {formatPlate(userData?.plateNumber)}
                 </p>
               </div>
             </div>
@@ -595,7 +607,8 @@ function App() {
                           <p
                             className={`font-mono font-bold text-sm ${isDanger ? "text-red-600" : "text-slate-600"}`}
                           >
-                            {user.user_id}
+                            {/* {user.user_id}*/}
+                            {formatPlate(user.user_id)}
                           </p>
                         </div>
                         <div className="text-right">
