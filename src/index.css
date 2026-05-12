@@ -1,0 +1,9 @@
+@import "tailwindcss";
+
+@theme {
+    /* Mendaftarkan Plus Jakarta Sans sebagai font utama */
+    --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+
+    /* Anda juga bisa menambah custom warna di sini jika mau */
+    --color-brand-blue: #2563eb;
+}
