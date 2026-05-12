@@ -279,13 +279,13 @@ function App() {
                 onClick={() => setIsPowerSaving(!isPowerSaving)}
                 className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[9px] font-black tracking-tighter transition-all ${isPowerSaving ? "bg-amber-100 text-amber-600 shadow-sm" : "bg-slate-200 text-slate-500"}`}
               >
-                {isPowerSaving ? "🔋 SAVER ON" : "⚡ NORMAL"}
+                {isPowerSaving ? "MODA PENGHEMAT BATERAI" : "MODA NORMAL"}
               </button>
               <button
                 onClick={toggleFullscreen}
                 className="bg-slate-800 text-white px-3 py-1 rounded-full text-[9px] font-black tracking-tighter"
               >
-                {isFullscreen ? "EXIT FULL" : "FULLSCREEN"}
+                {isFullscreen ? "KELUAR LAYAR PENUH" : "LAYAR PENUH"}
               </button>
             </div>
           </div>
