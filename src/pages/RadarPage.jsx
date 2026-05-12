@@ -816,7 +816,8 @@ function App() {
               </div>
             )}
           </div>
-          // NAVBAR
+
+          {/* NAVBAR */}
           <div className="fixed bottom-0 left-0 right-0 z-[2000]">
             <div className="relative h-20 bg-white border-t border-slate-200 shadow-[0_-10px_25px_-5px_rgba(0,0,0,0.05)] flex justify-center items-center">
               <div className="absolute -top-10 flex flex-col items-center">
