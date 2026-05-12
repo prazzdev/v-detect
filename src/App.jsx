@@ -18,7 +18,7 @@ import "leaflet/dist/leaflet.css";
 import { Power, Lock, Unlock } from "lucide-react";
 import { getDistance, getRhumbLineBearing } from "geolib";
 import { useGPS } from "./hooks/useGPS";
-import Auth from "./components/Auth"; // Komponen Auth Baru
+import { Auth } from "./components/Auth";
 import { supabase } from "./lib/supabaseClient";
 import { APP_SETTINGS } from "./config/appConfig";
 import { useWakeLock } from "./hooks/useWakeLock";
