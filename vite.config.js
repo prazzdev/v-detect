@@ -12,8 +12,8 @@ export default defineConfig({
       },
       includeAssets: ["favicon.ico", "apple-touch-icon.png"],
       manifest: {
-        name: "Radar Lalu Lintas Pintar",
-        short_name: "RadarLalin",
+        name: "Persimpangan Pintar Terawasi",
+        short_name: "PINTAS",
         description:
           "Peringatan persimpangan dan kendaraan terdekat secara real-time",
         theme_color: "#ffffff",
