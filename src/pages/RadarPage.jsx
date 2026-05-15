@@ -185,15 +185,32 @@ function App() {
 
     // Jika pertama kali mengaktifkan, muat semua audio ke memori
     if (newState && !audioEnabled) {
-      Object.entries(RADAR_AUDIO_RESOURCES).forEach(([key, url]) => {
-        const a = new Audio(url);
-        a.load();
-        audioPool.current[key] = a;
+      const promises = Object.entries(RADAR_AUDIO_RESOURCES).map(
+        ([key, url]) => {
+          return new Promise((resolve) => {
+            const a = new Audio(url);
+            a.preload = "auto";
+            a.load();
+            // Simpan ke pool
+            audioPool.current[key] = a;
+            // Resolve jika sudah bisa diputar
+            a.oncanplaythrough = () => resolve();
+            // Atau resolve paksa jika loading terlalu lama (timeout) agar tidak macet
+            setTimeout(resolve, 2000);
+          });
+        },
+      );
+
+      // Tunggu semua audio minimal siap dimainkan, baru bunyikan startup
+      Promise.all(promises).then(() => {
+        setAudioEnabled(true);
+        triggerRadarSound("startup");
       });
-      setAudioEnabled(true);
-      triggerRadarSound("startup"); // Bunyi saat radar mulai
+    } else if (newState && audioEnabled) {
+      // Jika sudah pernah load sebelumnya, langsung bunyikan saja
+      triggerRadarSound("startup");
     } else if (!newState) {
-      triggerRadarSound("shutdown"); // Bunyi saat radar mati
+      triggerRadarSound("shutdown");
     }
 
     setIsActive(newState);
@@ -233,15 +250,15 @@ function App() {
 
   // Alert & Warning Logic
   const [isWarningActive, setIsWarningActive] = useState(false);
-  const audioRef = useRef(
-    new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg"),
-  );
+  // const audioRef = useRef(
+  //   new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg"),
+  // );
   const RADIUS_WARNING = APP_SETTINGS?.RADIUS_WARNING || 30;
 
   const playWarningEffects = useCallback(() => {
-    audioRef.current.currentTime = 0;
-    audioRef.current.play().catch(() => {});
-    if ("vibrate" in navigator) navigator.vibrate(200);
+    // audioRef.current.currentTime = 0;
+    // audioRef.current.play().catch(() => {});
+    if ("vibrate" in navigator) navigator.vibrate([50, 100, 50]);
   }, []);
 
   // Fullscreen Logic
