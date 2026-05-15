@@ -250,16 +250,7 @@ function App() {
 
   // Alert & Warning Logic
   const [isWarningActive, setIsWarningActive] = useState(false);
-  // const audioRef = useRef(
-  //   new Audio("https://actions.google.com/sounds/v1/alarms/beep_short.ogg"),
-  // );
   const RADIUS_WARNING = APP_SETTINGS?.RADIUS_WARNING || 30;
-
-  const playWarningEffects = useCallback(() => {
-    // audioRef.current.currentTime = 0;
-    // audioRef.current.play().catch(() => {});
-    if ("vibrate" in navigator) navigator.vibrate([50, 100, 50]);
-  }, []);
 
   // Fullscreen Logic
   const toggleFullscreen = () => {
@@ -413,7 +404,7 @@ function App() {
         setIsWarningActive(true);
 
         // Suara bahaya kendaraan mendekat
-        triggerRadarSound("danger", 5000);
+        triggerRadarSound("danger", 10000);
 
         const intervalTime = minDistance <= 10 ? 300 : 800;
         const warningInterval = setInterval(
@@ -447,7 +438,6 @@ function App() {
     otherUsers,
     intersections,
     RADIUS_WARNING,
-    playWarningEffects,
     isActive,
     triggerRadarSound,
   ]);
