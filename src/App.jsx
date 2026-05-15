@@ -16,7 +16,7 @@ function App() {
         <Route path="/" element={<RadarPage />} />
 
         {/* Halaman Khusus Admin untuk Mapping Persimpangan */}
-        <Route path="/vdetect" element={<AdminMapping />} />
+        <Route path="/pintasan" element={<AdminMapping />} />
 
         {/* Fallback kembali ke radar */}
         <Route path="*" element={<Navigate to="/" />} />

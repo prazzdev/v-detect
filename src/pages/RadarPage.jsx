@@ -26,7 +26,17 @@ import { APP_SETTINGS } from "../config/appConfig";
 import { useWakeLock } from "../hooks/useWakeLock";
 import { useOrientationLock } from "../hooks/useOrientationLock";
 
-// Custom Icon Generator untuk Persimpangan (Lebih Organik & Mahal)
+const RADAR_AUDIO_RESOURCES = {
+  danger:
+    "https://res.cloudinary.com/dvo44ziqd/video/upload/v1778848685/OBJEK_TERDETEKSI_DALAM_RADIUS_50_METER_nhrhst.mp3",
+  intersection:
+    "https://res.cloudinary.com/dvo44ziqd/video/upload/v1778848686/WASPADA_PERSIMPANGAN_TANPA_LAMPU_LALU_LINTAS_l1e6li.mp3",
+  startup:
+    "https://res.cloudinary.com/dvo44ziqd/video/upload/v1778849820/RADAR_DIAKTIFKAN_ffcopw.mp3",
+  shutdown:
+    "https://res.cloudinary.com/dvo44ziqd/video/upload/v1778849820/RADAR_DINONAKTIFKAN_jcito5.mp3",
+};
+
 const createIntersectionIcon = () =>
   L.divIcon({
     className: "intersection-icon",
@@ -90,15 +100,20 @@ function App() {
   const [isActive, setIsActive] = useState(false);
   const [otherUsers, setOtherUsers] = useState([]);
   const [tick, setTick] = useState(0);
-  const [intersections, setIntersections] = useState([]); // State untuk persimpangan
+  const [intersections, setIntersections] = useState([]);
   const [isFollowUser, setIsFollowUser] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isDrivingMode, setIsDrivingMode] = useState(false);
   const [isPowerSaving, setIsPowerSaving] = useState(false);
   const [isSatellite, setIsSatellite] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  // State untuk audio
+  const [audioEnabled, setAudioEnabled] = useState(false);
   const appRef = useRef(null);
   const inactivityTimer = useRef(null);
+  // useRef untuk audio pool dan last sound time
+  const audioPool = useRef({}); // Menyimpan objek Audio
+  const lastSoundTime = useRef({ danger: 0, intersection: 0 }); // Untuk pembatas suara (throttling)
 
   const [lastSentPos, setLastSentPos] = useState({
     lat: 0,
@@ -164,8 +179,23 @@ function App() {
       .eq("user_id", userData.plateNumber.toUpperCase());
   }, [userData]);
 
+  // Toggle tracking radar dan memainkan suara
   const toggleTracking = async () => {
     const newState = !isActive;
+
+    // Jika pertama kali mengaktifkan, muat semua audio ke memori
+    if (newState && !audioEnabled) {
+      Object.entries(RADAR_AUDIO_RESOURCES).forEach(([key, url]) => {
+        const a = new Audio(url);
+        a.load();
+        audioPool.current[key] = a;
+      });
+      setAudioEnabled(true);
+      triggerRadarSound("startup"); // Bunyi saat radar mulai
+    } else if (!newState) {
+      triggerRadarSound("shutdown"); // Bunyi saat radar mati
+    }
+
     setIsActive(newState);
     if (!newState) {
       await removeMeFromRadar();
@@ -225,6 +255,24 @@ function App() {
     }
   };
 
+  // Trigger untuk memainkan suara radar
+  const triggerRadarSound = useCallback(
+    (key, interval = 0) => {
+      const now = Date.now();
+      // Cek jika suara perlu dibatasi waktunya
+      if (interval && now - lastSoundTime.current[key] < interval) return;
+
+      const audio = audioPool.current[key];
+      if (audio && audioEnabled) {
+        audio.currentTime = 0;
+        audio.play().catch(() => console.warn("Audio blocked by browser"));
+        lastSoundTime.current[key] = now;
+      }
+    },
+    [audioEnabled],
+  );
+
+  // Fullscreen Change Logic
   useEffect(() => {
     const handleFsChange = () => setIsFullscreen(!!document.fullscreenElement);
     document.addEventListener("fullscreenchange", handleFsChange);
@@ -292,6 +340,7 @@ function App() {
     });
   }, []);
 
+  // Load Data: Mengambil data pengguna lain dari database
   useEffect(() => {
     if (!userData) return;
     const loadData = async () => {
@@ -322,6 +371,7 @@ function App() {
     return () => supabase.removeChannel(channel);
   }, [userData, updateUsersList]);
 
+  // Tick Interval: Mengupdate tick setiap 3 detik
   useEffect(() => {
     const interval = setInterval(() => setTick((t) => t + 1), 3000);
     return () => clearInterval(interval);
@@ -329,28 +379,63 @@ function App() {
 
   // Proximity Warning System
   useEffect(() => {
-    if (!position || otherUsers.length === 0 || !isActive) {
+    // 1. Validasi awal
+    if (!position || !isActive) {
       setIsWarningActive(false);
       return;
     }
-    const distances = otherUsers.map((u) =>
-      getDistance(position, { latitude: u.lat, longitude: u.lng }),
-    );
-    const minDistance = Math.min(...distances);
 
-    if (minDistance <= RADIUS_WARNING) {
-      setIsWarningActive(true);
-      const intervalTime = minDistance <= 10 ? 300 : 800;
-      const warningInterval = setInterval(
-        () => playWarningEffects(),
-        intervalTime,
+    // --- LOGIKA A: DETEKSI KENDARAAN LAIN (Collision Warning) ---
+    if (otherUsers.length > 0) {
+      const distances = otherUsers.map((u) =>
+        getDistance(position, { latitude: u.lat, longitude: u.lng }),
       );
-      return () => clearInterval(warningInterval);
-    } else {
-      setIsWarningActive(false);
-    }
-  }, [position, otherUsers, RADIUS_WARNING, playWarningEffects, isActive]);
+      const minDistance = Math.min(...distances);
 
+      if (minDistance <= RADIUS_WARNING) {
+        setIsWarningActive(true);
+
+        // Suara bahaya kendaraan mendekat
+        triggerRadarSound("danger", 5000);
+
+        const intervalTime = minDistance <= 10 ? 300 : 800;
+        const warningInterval = setInterval(
+          () => playWarningEffects(),
+          intervalTime,
+        );
+        // Pembersihan interval jika komponen update atau radius berubah
+        // Note: return di sini akan membatalkan eksekusi kode di bawahnya,
+        // jadi kita harus berhati-hati.
+      } else {
+        setIsWarningActive(false);
+      }
+    }
+
+    // --- LOGIKA B: DETEKSI PERSIMPANGAN (Titik Biru) ---
+    if (intersections && intersections.length > 0) {
+      intersections.forEach((poi) => {
+        const distanceToIntersection = getDistance(
+          { latitude: position.lat, longitude: position.lng },
+          { latitude: poi.lat, longitude: poi.lng },
+        );
+
+        // Jika mendekati persimpangan radius 50 meter
+        if (distanceToIntersection <= 50) {
+          triggerRadarSound("intersection", 30000); // Suara narasi persimpangan
+        }
+      });
+    }
+  }, [
+    position,
+    otherUsers,
+    intersections,
+    RADIUS_WARNING,
+    playWarningEffects,
+    isActive,
+    triggerRadarSound,
+  ]);
+
+  // Handle Logout: Menampilkan konfirmasi sebelum logout
   const handleLogout = async () => {
     const result = await Swal.fire({
       title: "Keluar Aplikasi?",
@@ -373,6 +458,7 @@ function App() {
     }
   };
 
+  // Show Help: Menampilkan panduan radar
   const showHelp = () => {
     Swal.fire({
       title: "<strong>Panduan Radar</strong>",
@@ -408,6 +494,7 @@ function App() {
     });
   };
 
+  // Format Plate: Mengubah format nomor plat kendaraan
   const formatPlate = (plate) => {
     if (!plate) return "...";
     const regex = /^([A-Z]{1,2})(\d{1,4})([A-Z]{1,3})$/;
