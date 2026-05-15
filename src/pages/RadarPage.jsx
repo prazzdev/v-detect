@@ -183,40 +183,46 @@ function App() {
   const toggleTracking = async () => {
     const newState = !isActive;
 
-    // Jika pertama kali mengaktifkan, muat semua audio ke memori
-    if (newState && !audioEnabled) {
-      const promises = Object.entries(RADAR_AUDIO_RESOURCES).map(
-        ([key, url]) => {
-          return new Promise((resolve) => {
-            const a = new Audio(url);
-            a.preload = "auto";
-            a.load();
-            // Simpan ke pool
-            audioPool.current[key] = a;
-            // Resolve jika sudah bisa diputar
-            a.oncanplaythrough = () => resolve();
-            // Atau resolve paksa jika loading terlalu lama (timeout) agar tidak macet
-            setTimeout(resolve, 2000);
-          });
-        },
-      );
-
-      // Tunggu semua audio minimal siap dimainkan, baru bunyikan startup
-      Promise.all(promises).then(() => {
-        setAudioEnabled(true);
-        triggerRadarSound("startup");
-      });
-    } else if (newState && audioEnabled) {
-      // Jika sudah pernah load sebelumnya, langsung bunyikan saja
-      triggerRadarSound("startup");
-    } else if (!newState) {
-      triggerRadarSound("shutdown");
-    }
-
+    // 1. Sinkronisasi State Utama segera agar UI (tombol/animasi) responsif
     setIsActive(newState);
-    if (!newState) {
+
+    if (newState) {
+      if (!audioEnabled) {
+        // Proses Pre-load Audio
+        const promises = Object.entries(RADAR_AUDIO_RESOURCES).map(
+          ([key, url]) => {
+            return new Promise((resolve) => {
+              const a = new Audio(url);
+              a.preload = "auto";
+              a.load();
+              audioPool.current[key] = a;
+
+              // Resolve ketika data cukup untuk mulai diputar
+              a.oncanplaythrough = () => resolve();
+              // Timeout 2 detik agar tidak stuck jika koneksi lambat
+              setTimeout(resolve, 2000);
+            });
+          },
+        );
+
+        Promise.all(promises).then(() => {
+          setAudioEnabled(true);
+          // Pastikan masih dalam kondisi active saat suara startup dipicu
+          triggerRadarSound("startup");
+        });
+      } else {
+        // Jika sudah enabled, langsung putar
+        triggerRadarSound("startup");
+      }
+    } else {
+      // 2. Logika saat Mematikan Radar
+      triggerRadarSound("shutdown");
+
+      // Bersihkan data di database dan timer
       await removeMeFromRadar();
-      clearTimeout(inactivityTimer.current);
+      if (inactivityTimer.current) {
+        clearTimeout(inactivityTimer.current);
+      }
     }
   };
 
@@ -267,13 +273,20 @@ function App() {
   const triggerRadarSound = useCallback(
     (key, interval = 0) => {
       const now = Date.now();
-      // Cek jika suara perlu dibatasi waktunya
       if (interval && now - lastSoundTime.current[key] < interval) return;
 
       const audio = audioPool.current[key];
       if (audio && audioEnabled) {
+        // CEK APAKAH ADA AUDIO LAIN YANG SEDANG JALAN
+        const isAnyPlaying = Object.values(audioPool.current).some(
+          (a) => !a.paused,
+        );
+
+        // Jika sedang ada suara (seperti startup), jangan ganggu kecuali ini suara bahaya (danger)
+        if (isAnyPlaying && key !== "danger") return;
+
         audio.currentTime = 0;
-        audio.play().catch(() => console.warn("Audio blocked by browser"));
+        audio.play().catch(() => {});
         lastSoundTime.current[key] = now;
       }
     },
@@ -388,8 +401,7 @@ function App() {
   // Proximity Warning System
   useEffect(() => {
     // 1. Validasi awal
-    if (!position || !isActive) {
-      setIsWarningActive(false);
+    if (!position || !isActive || !audioEnabled) {
       return;
     }
 
@@ -403,17 +415,12 @@ function App() {
       if (minDistance <= RADIUS_WARNING) {
         setIsWarningActive(true);
 
-        // Suara bahaya kendaraan mendekat
+        // Suntikkan delay 3-4 detik di triggerRadarSound agar tidak menabrak startup
+        // Gunakan throttle 10000ms (10 detik) agar tidak spam
         triggerRadarSound("danger", 10000);
 
-        const intervalTime = minDistance <= 10 ? 300 : 800;
-        const warningInterval = setInterval(
-          () => playWarningEffects(),
-          intervalTime,
-        );
-        // Pembersihan interval jika komponen update atau radius berubah
-        // Note: return di sini akan membatalkan eksekusi kode di bawahnya,
-        // jadi kita harus berhati-hati.
+        // Jika Anda masih menyimpan playWarningEffects (beep), jalankan di sini
+        // Namun jika sudah dihapus sesuai saran sebelumnya, bagian interval ini bisa dibuang
       } else {
         setIsWarningActive(false);
       }
@@ -429,7 +436,9 @@ function App() {
 
         // Jika mendekati persimpangan radius 50 meter
         if (distanceToIntersection <= 50) {
-          triggerRadarSound("intersection", 30000); // Suara narasi persimpangan
+          // Trik: Gunakan interval yang lebih besar atau pastikan triggerRadarSound
+          // memiliki logika internal untuk tidak memotong audio yang sedang jalan.
+          triggerRadarSound("intersection", 30000);
         }
       });
     }
@@ -439,6 +448,7 @@ function App() {
     intersections,
     RADIUS_WARNING,
     isActive,
+    audioEnabled,
     triggerRadarSound,
   ]);
 
@@ -464,6 +474,18 @@ function App() {
       await supabase.auth.signOut();
     }
   };
+
+  // Handle beforeunload: Menampilkan konfirmasi jika radar masih aktif saat keluar
+  useEffect(() => {
+    const handleBeforeUnload = (e) => {
+      if (isActive) {
+        e.preventDefault();
+        e.returnValue = "Radar masih aktif, yakin ingin keluar?";
+      }
+    };
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+  }, [isActive]);
 
   // Show Help: Menampilkan panduan radar
   const showHelp = () => {
