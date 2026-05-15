@@ -1,8 +1,17 @@
 import React, { useState } from "react";
 import { supabase } from "../lib/supabaseClient";
-import { Mail, Lock, User, CreditCard, ChevronRight } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  User,
+  CreditCard,
+  ChevronRight,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 export const Auth = ({ onAuthSuccess }) => {
+  const [showPassword, setShowPassword] = useState(false);
   const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -67,10 +76,10 @@ export const Auth = ({ onAuthSuccess }) => {
             <span className="text-3xl">📡</span>
           </div>
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">
-            {isRegister ? "BUAT AKUN RADAR" : "SELAMAT DATANG"}
+            {isRegister ? "BUAT AKUN PINTAS" : "SELAMAT DATANG"}
           </h2>
           <p className="text-xs font-bold text-slate-400 mt-1 tracking-widest uppercase">
-            Sistem Monitoring Kendaraan
+            Sistem Monitoring Lalu Lintas
           </p>
         </div>
 
@@ -99,14 +108,22 @@ export const Auth = ({ onAuthSuccess }) => {
               size={18}
             />
             <input
-              type="password"
+              type={showPassword ? "text" : "password"} // Dinamis berdasarkan state
               placeholder="Password"
-              className="w-full bg-white border border-slate-100 py-3.5 pl-12 pr-4 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
+              className="w-full bg-white border border-slate-100 py-3.5 pl-12 pr-12 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all shadow-sm"
               onChange={(e) =>
                 setFormData({ ...formData, password: e.target.value })
               }
               required
             />
+            {/* Tombol Mata */}
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-4 top-3.5 text-slate-400 hover:text-blue-600 transition-colors"
+            >
+              {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+            </button>
           </div>
 
           {isRegister && (
@@ -134,7 +151,7 @@ export const Auth = ({ onAuthSuccess }) => {
                 />
                 <input
                   type="text"
-                  placeholder="Plat Nomor (Contoh: AB1234XX)"
+                  placeholder="Plat Nomor (Contoh: R1234XX)"
                   className="w-full bg-white border border-slate-100 py-3.5 pl-12 pr-4 rounded-2xl text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none shadow-sm"
                   onChange={(e) =>
                     setFormData({ ...formData, plate_number: e.target.value })
