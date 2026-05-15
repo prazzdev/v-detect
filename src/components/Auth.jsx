@@ -72,14 +72,18 @@ export const Auth = ({ onAuthSuccess }) => {
     <div className="min-h-screen flex items-center justify-center p-6 bg-slate-50">
       <div className="w-full max-w-md bg-white/70 backdrop-blur-xl border border-white p-8 rounded-[2.5rem] shadow-2xl shadow-slate-200">
         <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-blue-200">
-            <span className="text-3xl">📡</span>
+          <div className="w-16 h-16 bg-white rounded-2xl mx-auto mb-4 flex items-center justify-center shadow-lg shadow-blue-100 border border-slate-50 overflow-hidden">
+            <img
+              src="/android-chrome-192x192.png"
+              alt="Radar Logo"
+              className="w-full h-full object-cover"
+            />
           </div>
           <h2 className="text-2xl font-black text-slate-800 tracking-tight">
-            {isRegister ? "BUAT AKUN PINTAS" : "SELAMAT DATANG"}
+            {isRegister ? "BUAT AKUN PINTAS" : "SELAMAT DATANG DI PINTAS"}
           </h2>
           <p className="text-xs font-bold text-slate-400 mt-1 tracking-widest uppercase">
-            Sistem Monitoring Lalu Lintas
+            Sistem Persimpangan Pintar Terawasi
           </p>
         </div>
 
@@ -185,7 +189,7 @@ export const Auth = ({ onAuthSuccess }) => {
               ? "MEMPROSES..."
               : isRegister
                 ? "DAFTAR SEKARANG"
-                : "MASUK KE RADAR"}
+                : "MASUK KE SISTEM"}
             <ChevronRight size={16} />
           </button>
         </form>
