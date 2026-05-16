@@ -90,7 +90,7 @@ function RecenterMap({ position, isFollowUser, isDrivingMode }) {
   return null;
 }
 
-function App() {
+function RadarPage() {
   const { position } = useGPS();
   const isWakeLockActive = useWakeLock();
   useOrientationLock();
@@ -989,4 +989,4 @@ function App() {
   );
 }
 
-export default App;
+export default RadarPage;
